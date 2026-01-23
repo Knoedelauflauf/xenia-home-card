@@ -1,0 +1,29 @@
+{
+  "card": {
+    "loading": "Loading...",
+    "no_shots": "No shots recorded yet",
+    "no_entity": "No Xenia event entity found",
+    "load_error": "Failed to load shot history",
+    "default_title": "Espresso Shots"
+  },
+  "chart": {
+    "pressure": "Pressure (bar)",
+    "flow": "Flow (ml/s)",
+    "weight": "Weight (g)",
+    "brew_group_temp": "Brew Group Temp (°C)",
+    "brew_boiler_temp": "Brew Boiler Temp (°C)",
+    "time": "Time (s)"
+  },
+  "details": {
+    "brew_group_short": "BG",
+    "brew_boiler_short": "BB",
+    "not_available": "N/A"
+  },
+  "editor": {
+    "entity": "Entity",
+    "title": "Title",
+    "show_chart": "Show Chart",
+    "chart_height": "Chart Height (px)",
+    "max_shots": "Max Shots to Display"
+  }
+}

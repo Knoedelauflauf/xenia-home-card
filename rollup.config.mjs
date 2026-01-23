@@ -2,6 +2,7 @@ import resolve from "@rollup/plugin-node-resolve";
 import commonjs from "@rollup/plugin-commonjs";
 import typescript from "@rollup/plugin-typescript";
 import terser from "@rollup/plugin-terser";
+import json from "@rollup/plugin-json";
 
 const production = !process.env.ROLLUP_WATCH;
 
@@ -15,6 +16,7 @@ export default {
   plugins: [
     resolve(),
     commonjs(),
+    json(),
     typescript({ sourceMap: !production }),
     production && terser(),
   ],

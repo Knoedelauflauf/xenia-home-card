@@ -1,6 +1,7 @@
 import { LitElement, html, css, TemplateResult } from "lit";
 import { customElement, property, state } from "lit/decorators.js";
 import { XeniaHomeCardConfig, HomeAssistant } from "./types";
+import { localize } from "./localize";
 
 @customElement("xenia-home-card-editor")
 export class XeniaHomeCardEditor extends LitElement {
@@ -12,15 +13,46 @@ export class XeniaHomeCardEditor extends LitElement {
     this._config = config;
   }
 
+  private _t(key: string): string {
+    return localize(key, this.hass?.language);
+  }
+
   protected firstUpdated(): void {
     this._loadEntities();
+  }
+
+  protected updated(changedProps: Map<string, unknown>): void {
+    if (changedProps.has("hass")) {
+      this._loadEntities();
+    }
+    if (
+      changedProps.has("_entities") &&
+      this._entities.length > 0 &&
+      this._config &&
+      !this._config.entity
+    ) {
+      const newConfig = { ...this._config, entity: this._entities[0] };
+      this._config = newConfig;
+      this.dispatchEvent(
+        new CustomEvent("config-changed", {
+          detail: { config: newConfig },
+          bubbles: true,
+          composed: true,
+        })
+      );
+    }
   }
 
   private _loadEntities(): void {
     if (!this.hass) return;
 
     this._entities = Object.keys(this.hass.states)
-      .filter((entityId) => entityId.startsWith("event.xenia_espresso_machine"))
+      .filter(
+        (entityId) =>
+          entityId.startsWith("event.xenia_espresso_machine") ||
+          (entityId.startsWith("event.xenia_") &&
+            entityId.includes("shot_tracker"))
+      )
       .sort();
   }
 
@@ -35,13 +67,18 @@ export class XeniaHomeCardEditor extends LitElement {
     let newValue: string | number | boolean | undefined;
     const detail = ev.detail;
 
-    if (detail !== undefined) {
-      if (typeof detail === "object" && "value" in detail) {
-        newValue = detail.value;
-      } else {
+    const targetValue = (target as HTMLElement & { value?: string }).value;
+    if (targetValue !== undefined) {
+      newValue = targetValue;
+    } else if (detail !== undefined) {
+      if (typeof detail === "object" && detail !== null && "value" in detail) {
+        newValue = (detail as { value?: string | number | boolean }).value;
+      } else if (typeof detail !== "object") {
         newValue = detail;
       }
     }
+
+    if (typeof newValue === "object") return;
 
     if (newValue === this._config[configKey as keyof XeniaHomeCardConfig]) {
       return;
@@ -111,31 +148,18 @@ export class XeniaHomeCardEditor extends LitElement {
       return html``;
     }
 
-    const autoDetectedEntity = this._entities.length > 0 ? this._entities[0] : null;
-    const isAutoDetected = !this._config.entity && autoDetectedEntity;
-
     return html`
       <div class="card-config">
-        ${isAutoDetected
-          ? html`
-              <div class="config-row info-box">
-                <ha-icon icon="mdi:check-circle"></ha-icon>
-                <span>Auto-detected: ${autoDetectedEntity}</span>
-              </div>
-            `
-          : ""}
-
         <div class="config-row">
           <ha-select
             naturalMenuWidth
             fixedMenuPosition
-            label="Entity (optional - auto-detected)"
+            .label=${this._t("editor.entity")}
             .configKey=${"entity"}
-            .value=${this._config.entity || ""}
+            .value=${this._config.entity || this._entities[0] || ""}
             @selected=${this._valueChanged}
             @closed=${(e: Event) => e.stopPropagation()}
           >
-            <mwc-list-item value="">Auto-detect</mwc-list-item>
             ${this._entities.map(
               (entity) => html`
                 <mwc-list-item .value=${entity}>${entity}</mwc-list-item>
@@ -146,9 +170,9 @@ export class XeniaHomeCardEditor extends LitElement {
 
         <div class="config-row">
           <ha-textfield
-            label="Title"
+            .label=${this._t("editor.title")}
             .configKey=${"title"}
-            .value=${this._config.title || "Espresso Shots"}
+            .value=${this._config.title || ""}
             @input=${(e: Event) => {
               const target = e.target as HTMLInputElement & { configKey?: string };
               target.configKey = "title";
@@ -158,7 +182,7 @@ export class XeniaHomeCardEditor extends LitElement {
         </div>
 
         <div class="config-row toggle-row">
-          <span class="toggle-label">Show Chart</span>
+          <span class="toggle-label">${this._t("editor.show_chart")}</span>
           <ha-switch
             .checked=${this._config.show_chart !== false}
             .configKey=${"show_chart"}
@@ -168,7 +192,7 @@ export class XeniaHomeCardEditor extends LitElement {
 
         <div class="config-row">
           <ha-textfield
-            label="Chart Height (px)"
+            .label=${this._t("editor.chart_height")}
             type="number"
             min="100"
             max="500"
@@ -180,7 +204,7 @@ export class XeniaHomeCardEditor extends LitElement {
 
         <div class="config-row">
           <ha-textfield
-            label="Max Shots to Display"
+            .label=${this._t("editor.max_shots")}
             type="number"
             min="1"
             max="100"
@@ -224,21 +248,6 @@ export class XeniaHomeCardEditor extends LitElement {
 
     ha-switch {
       --mdc-theme-secondary: var(--primary-color);
-    }
-
-    .info-box {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px;
-      background-color: var(--success-color, #4caf50);
-      color: white;
-      border-radius: 8px;
-      font-size: 14px;
-    }
-
-    .info-box ha-icon {
-      --mdc-icon-size: 20px;
     }
   `;
 }

@@ -1,0 +1,29 @@
+{
+  "card": {
+    "loading": "Laden...",
+    "no_shots": "Noch keine Bezüge aufgezeichnet",
+    "no_entity": "Kein Xenia Event-Entity gefunden",
+    "load_error": "Fehler beim Laden der Bezüge",
+    "default_title": "Espresso Bezüge"
+  },
+  "chart": {
+    "pressure": "Druck (bar)",
+    "flow": "Fluss (ml/s)",
+    "weight": "Gewicht (g)",
+    "brew_group_temp": "Brühgruppe (°C)",
+    "brew_boiler_temp": "Brühkessel (°C)",
+    "time": "Zeit (s)"
+  },
+  "details": {
+    "brew_group_short": "BG",
+    "brew_boiler_short": "BK",
+    "not_available": "k.A."
+  },
+  "editor": {
+    "entity": "Entity",
+    "title": "Titel",
+    "show_chart": "Diagramm anzeigen",
+    "chart_height": "Diagrammhöhe (px)",
+    "max_shots": "Maximale Anzahl Bezüge"
+  }
+}

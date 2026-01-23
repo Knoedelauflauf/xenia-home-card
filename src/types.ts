@@ -2,7 +2,9 @@ import { LovelaceCard, LovelaceCardConfig } from "custom-card-helpers";
 
 export interface ShotData {
   start_time: string;
+  brew_end_time?: string | null;
   duration_seconds: number;
+  afterflow_seconds?: number;
   timestamps: number[];
   brew_group_temps: number[];
   brew_boiler_temps: number[];
@@ -14,6 +16,7 @@ export interface ShotData {
 export interface XeniaHomeCardConfig extends LovelaceCardConfig {
   type: string;
   entity?: string;
+  event_type?: string;
   title?: string;
   show_chart?: boolean;
   chart_height?: number;
@@ -21,6 +24,7 @@ export interface XeniaHomeCardConfig extends LovelaceCardConfig {
 }
 
 export interface HomeAssistant {
+  language: string;
   states: { [entity_id: string]: HassEntity };
   callService: (
     domain: string,
