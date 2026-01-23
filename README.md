@@ -1,14 +1,17 @@
 # Xenia Home Card
 
-A Home Assistant Lovelace card for visualizing espresso shots from the Xenia espresso machine.
+A Home Assistant Lovelace card for visualizing espresso shots from Xenia espresso machines.
+
+## Disclaimer
+
+This project is **not affiliated with, endorsed by, or connected to Xenia Espresso or any related company**. The name "Xenia" is used solely to identify compatibility with Xenia espresso machines. All trademarks belong to their respective owners.
 
 ## Features
 
-- **Auto-detection**: Automatically finds your Xenia espresso machine - no configuration needed
-- View shot history with timestamps, duration, and weight
-- Interactive chart showing pressure, flow, weight, and temperature over time
-- Real-time updates when new shots are completed
-- Click on any shot to view its detailed chart
+- **Shot history**: View past shots with timestamps, duration, and weight
+- **Interactive chart**: Pressure, flow, weight, and temperature over time
+- **Real-time updates**: Automatically updates when new shots are completed
+- **Localization**: Available in English and German
 
 ## Installation
 
@@ -41,34 +44,31 @@ Add the card to your dashboard - it will automatically detect your Xenia machine
 type: custom:xenia-home-card
 ```
 
-That's it! The card will auto-detect your Xenia espresso machine.
-
-### Optional Configuration
-
-```yaml
-type: custom:xenia-home-card
-title: Espresso Shots
-show_chart: true
-chart_height: 200
-max_shots: 10
-```
-
 ### Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `entity` | string | auto-detect | The shot tracker event entity (optional) |
-| `title` | string | "Espresso Shots" | Card title |
-| `show_chart` | boolean | true | Show the shot chart |
-| `chart_height` | number | 200 | Chart height in pixels |
-| `max_shots` | number | 10 | Maximum shots to display (from last 30 days) |
+| `title` | string | (localized) | Card title |
+| `show_chart` | boolean | `true` | Show the shot chart |
+| `chart_height` | number | `200` | Chart height in pixels |
+| `max_shots` | number | `10` | Maximum shots to display |
 
-The card uses Home Assistant's built-in history to retrieve past shots - no additional configuration needed in the integration.
+### Example with all options
+
+```yaml
+type: custom:xenia-home-card
+entity: event.xenia_espresso_machine_shot_tracker
+title: My Espresso Shots
+show_chart: true
+chart_height: 250
+max_shots: 20
+```
 
 ## Requirements
 
-- Home Assistant with the Xenia Espresso Machine integration installed
-- The integration must be configured and connected to your machine
+- Home Assistant
+- Xenia Espresso Machine integration installed and configured
 
 ## Development
 
