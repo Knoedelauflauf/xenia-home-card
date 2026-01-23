@@ -1,0 +1,8 @@
+node_modules/
+*.log
+.DS_Store
+
+# TypeScript build artifacts (only .js needed for HACS)
+dist/*.d.ts
+dist/*.d.ts.map
+dist/*.js.map
