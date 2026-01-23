@@ -4,7 +4,12 @@ A Home Assistant Lovelace card for visualizing espresso shots from Xenia espress
 
 ## Disclaimer
 
-This project is **not affiliated with, endorsed by, or connected to Xenia Espresso or any related company**. The name "Xenia" is used solely to identify compatibility with Xenia espresso machines. All trademarks belong to their respective owners.
+> [!IMPORTANT]
+> This project is an unofficial Home Assistant Lovelace card for visualizing espresso shots from machines produced by Xenia Espresso GmbH.
+> It is **not affiliated with, endorsed by, or supported by Xenia Espresso GmbH** in any way.
+> All product and company names, trademarks, and registered trademarks are the property of their respective owners.
+> Use of names or trademarks in this project is solely for identification purposes to indicate device compatibility.
+> This software is provided "as is", without any warranty. Use at your own risk.
 
 ## Features
 
