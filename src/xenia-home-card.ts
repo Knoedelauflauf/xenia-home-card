@@ -13,7 +13,6 @@ import {
 } from "chart.js";
 import { ShotData, XeniaHomeCardConfig, HomeAssistant } from "./types";
 import { localize } from "./localize";
-import "./xenia-home-card-editor";
 
 Chart.register(
   LineController,
@@ -47,8 +46,57 @@ export class XeniaHomeCard extends LitElement {
   private _unsubscribe: (() => void) | null = null;
   private _shotKeys = new Set<string>();
 
-  static getConfigElement(): HTMLElement {
-    return document.createElement("xenia-home-card-editor");
+  static getConfigForm() {
+    return {
+      schema: [
+        {
+          name: "entity",
+          selector: { entity: { filter: { domain: "event" } } },
+        },
+        { name: "title", selector: { text: {} } },
+        {
+          name: "show_chart",
+          default: true,
+          selector: { boolean: {} },
+        },
+        {
+          name: "chart_height",
+          default: 200,
+          selector: {
+            number: { min: 100, max: 500, mode: "box", unit_of_measurement: "px" },
+          },
+        },
+        {
+          name: "max_shots",
+          default: 10,
+          selector: { number: { min: 1, max: 100, mode: "box" } },
+        },
+      ],
+      assertConfig: (config: XeniaHomeCardConfig) => {
+        if (
+          config.chart_height !== undefined &&
+          (config.chart_height < 100 || config.chart_height > 500)
+        ) {
+          throw new Error("chart_height must be between 100 and 500");
+        }
+        if (
+          config.max_shots !== undefined &&
+          (config.max_shots < 1 || config.max_shots > 100)
+        ) {
+          throw new Error("max_shots must be between 1 and 100");
+        }
+      },
+      computeLabel: (schema: { name: string }) => {
+        // computeLabel is invoked statically; hass.language is unavailable here.
+        // Use the browser locale as a best-effort substitute. localize() returns
+        // the key string on miss, so we compare against the key to detect that
+        // and fall back to the bare schema name.
+        const lang = navigator.language?.split("-")[0];
+        const key = `editor.${schema.name}`;
+        const label = localize(key, lang);
+        return label === key ? schema.name : label;
+      },
+    };
   }
 
   static getStubConfig(): Partial<XeniaHomeCardConfig> {
@@ -156,10 +204,8 @@ export class XeniaHomeCard extends LitElement {
           const data = event.data as {
             entity_id?: string;
             new_state?: {
-              state?: string;
               attributes?: {
                 event_type?: string;
-                event_data?: ShotData;
               };
             };
           };
@@ -167,15 +213,11 @@ export class XeniaHomeCard extends LitElement {
           // Check if this is our entity and a shot_completed event
           if (data.entity_id === entityId && data.new_state) {
             const attributes = data.new_state.attributes;
-            const eventType =
-              attributes?.event_type ?? (data.new_state.state as string);
-            const eventData =
-              attributes?.event_data ?? (attributes as unknown as ShotData);
-            if (eventType === "shot_completed") {
-              const shotData = this._normalizeShotData(eventData);
-              if (shotData) {
-                this._pushShot(shotData);
-              }
+            if (attributes?.event_type !== "shot_completed") return;
+            const eventData = (attributes as unknown as ShotData);
+            const shotData = this._normalizeShotData(eventData);
+            if (shotData) {
+              this._pushShot(shotData);
             }
           }
         },
@@ -286,8 +328,6 @@ export class XeniaHomeCard extends LitElement {
         return;
       }
 
-      console.debug("Xenia Home Card: Loading history for", entityId);
-
       // Use Home Assistant's history API to get past events
       const endTime = new Date();
       const startTime = new Date();
@@ -297,7 +337,6 @@ export class XeniaHomeCard extends LitElement {
         s: string; // state
         a: {       // attributes
           event_type?: string;
-          event_data?: ShotData;
         };
         lu: number; // last_updated timestamp
       }
@@ -314,15 +353,10 @@ export class XeniaHomeCard extends LitElement {
       if (history && history[entityId]) {
         // Filter for shot_completed events and extract shot data
         const shots = history[entityId]
-          .filter(
-            (state) =>
-              state.a?.event_type === "shot_completed" ||
-              state.s === "shot_completed"
-          )
+          .filter((state) => state.a?.event_type === "shot_completed")
           .map((state) => {
             const attributes = state.a;
-            const eventData =
-              attributes?.event_data ?? (attributes as unknown as ShotData);
+            const eventData = attributes as unknown as ShotData;
             return this._normalizeShotData(eventData);
           })
           .filter((shot): shot is ShotData => Boolean(shot))
@@ -335,8 +369,9 @@ export class XeniaHomeCard extends LitElement {
         this._selectedShot = this._shots[0];
       }
     } catch (err) {
-      this._error = `${this._t("card.load_error")}: ${err}`;
-      console.error(this._error);
+      const detail = this._describeError(err);
+      this._error = `${this._t("card.load_error")}: ${detail}`;
+      console.error("Xenia Home Card: load history failed", err);
     } finally {
       this._loading = false;
     }
@@ -562,6 +597,21 @@ export class XeniaHomeCard extends LitElement {
     return { min, max };
   }
 
+  private _describeError(err: unknown): string {
+    if (err instanceof Error) return err.message;
+    if (err && typeof err === "object") {
+      const obj = err as { message?: unknown; code?: unknown };
+      if (typeof obj.message === "string") return obj.message;
+      if (typeof obj.code === "string") return obj.code;
+      try {
+        return JSON.stringify(err);
+      } catch {
+        return String(err);
+      }
+    }
+    return String(err);
+  }
+
   private _formatDate(isoString: string): string {
     const date = new Date(isoString);
     return date.toLocaleString("de-DE", {
@@ -660,7 +710,9 @@ export class XeniaHomeCard extends LitElement {
               </span>
               <span class="detail">
                 <ha-icon icon="mdi:gauge"></ha-icon>
-                ${Math.max(...this._selectedShot.pump_pressures).toFixed(1)} bar
+                ${this._selectedShot.pump_pressures.length > 0
+                  ? `${Math.max(...this._selectedShot.pump_pressures).toFixed(1)} bar`
+                  : this._t("details.not_available")}
               </span>
             </div>
           `
