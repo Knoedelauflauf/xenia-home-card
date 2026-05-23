@@ -35,7 +35,7 @@ export function createMockHass(options: CreateMockHassOptions = {}): MockHass {
   const unsubscribeSpy = vi.fn();
   const mock: MockHass = {
     language: options.language ?? "en",
-    locale: options.locale,
+    ...(options.locale ? { locale: options.locale } : {}),
     states: options.states ?? {},
     callService: vi.fn().mockResolvedValue(undefined),
     callWS: vi.fn().mockImplementation((message: Record<string, unknown>) => {
@@ -45,10 +45,12 @@ export function createMockHass(options: CreateMockHassOptions = {}): MockHass {
       return Promise.resolve(undefined);
     }),
     connection: {
-      subscribeEvents: vi.fn().mockImplementation((cb: (e: unknown) => void) => {
-        mock.__eventCallback = cb;
-        return Promise.resolve(unsubscribeSpy);
-      }),
+      subscribeEvents: vi
+        .fn()
+        .mockImplementation((cb: (e: unknown) => void) => {
+          mock.__eventCallback = cb;
+          return Promise.resolve(unsubscribeSpy);
+        }),
       subscribeMessage: vi
         .fn()
         .mockImplementation((cb: (msg: MockTriggerMessage) => void) => {

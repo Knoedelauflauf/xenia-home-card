@@ -1,10 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ES2021",
+    "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "rootDir": "./src",
-    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "declaration": false,
     "sourceMap": false,
     "outDir": "./dist",
@@ -18,9 +18,36 @@
     "noUnusedParameters": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
     "esModuleInterop": true,
     "experimentalDecorators": true,
-    "useDefineForClassFields": false
+    "useDefineForClassFields": false,
+    "skipLibCheck": true,
+    "plugins": [
+      {
+        "name": "ts-lit-plugin",
+        "strict": true,
+        "rules": {
+          "no-unknown-tag-name": "error",
+          "no-missing-import": "error",
+          "no-unknown-attribute": "off",
+          "no-legacy-attribute": "error",
+          "no-incompatible-type-binding": "warning",
+          "no-property-visibility-mismatch": "error",
+          "no-invalid-css": "off"
+        },
+        "globalTags": [
+          "ha-card",
+          "ha-icon",
+          "ha-icon-button",
+          "ha-form",
+          "ha-formfield",
+          "ha-textfield",
+          "ha-selector"
+        ]
+      }
+    ]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]

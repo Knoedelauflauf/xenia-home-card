@@ -6,7 +6,9 @@ import { makeShot, makeEventState, makeHistoryEntry } from "./helpers/fixtures";
 
 // Mock Chart.js — patch with a proper constructor so `new Chart(ctx, ...)` works.
 vi.mock("chart.js", () => {
-  const ChartConstructor = vi.fn(function MockChart(this: Record<string, unknown>) {
+  const ChartConstructor = vi.fn(function MockChart(
+    this: Record<string, unknown>
+  ) {
     this.destroy = vi.fn();
     this.update = vi.fn();
     this.ctx = { canvas: {} };
@@ -103,7 +105,8 @@ describe("xenia-home-card mount", () => {
     const el = await mountCard(hass);
     await flush(10);
     (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    await (el as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
     const empty = el.shadowRoot.querySelector(".empty");
     expect(empty).not.toBeNull();
   });
@@ -115,17 +118,18 @@ describe("xenia-home-card mount", () => {
       makeShot({ start_time: "2026-05-18T10:00:00+00:00" }),
     ];
     const hass = createMockHass({
-      states: { [ENTITY_ID]: makeEventState(shots[2]) },
+      states: { [ENTITY_ID]: makeEventState(shots[2]!) },
       history: { [ENTITY_ID]: shots.map(makeHistoryEntry) },
     });
     const el = await mountCard(hass);
     await flush();
     (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    await (el as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
 
     const items = el.shadowRoot.querySelectorAll(".shot-item");
     expect(items.length).toBe(3);
-    expect(items[0].classList.contains("selected")).toBe(true);
+    expect(items[0]!.classList.contains("selected")).toBe(true);
 
     const canvas = el.shadowRoot.querySelector("#shot-chart");
     expect(canvas).not.toBeNull();
@@ -153,7 +157,8 @@ describe("xenia-home-card mount", () => {
         },
       },
     });
-    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    await (el as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
 
     const items = el.shadowRoot.querySelectorAll(".shot-item");
     expect(items.length).toBe(2);
@@ -183,7 +188,8 @@ describe("xenia-home-card mount", () => {
         },
       });
     }
-    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    await (el as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
 
     expect(el.shadowRoot.querySelectorAll(".shot-item").length).toBe(1);
   });
@@ -210,7 +216,8 @@ describe("xenia-home-card mount", () => {
         },
       },
     });
-    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    await (el as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
 
     expect(el.shadowRoot.querySelectorAll(".shot-item").length).toBe(1);
   });
@@ -227,11 +234,11 @@ describe("xenia-home-card mount", () => {
     await flush();
 
     const historyCall = hass.callWS.mock.calls.find(
-      (c) => (c[0] as { type: string }).type === "history/history_during_period",
+      (c) => (c[0] as { type: string }).type === "history/history_during_period"
     );
     expect(historyCall).toBeDefined();
     expect((historyCall![0] as { entity_ids: string[] }).entity_ids).toContain(
-      renamedEntityId,
+      renamedEntityId
     );
   });
 
@@ -243,7 +250,8 @@ describe("xenia-home-card mount", () => {
     const el = await mountCard(hass, { show_chart: false });
     await flush();
     (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    await (el as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
 
     expect(el.shadowRoot.querySelector("#shot-chart")).toBeNull();
   });
@@ -258,14 +266,15 @@ describe("xenia-home-card mount", () => {
 
     // Confirm chart was constructed.
     expect(ChartModule.Chart).toHaveBeenCalled();
-    const chartInstance = (ChartModule.Chart as unknown as Mock).mock.results[0]
-      .value as { destroy: Mock };
+    const chartInstance = (ChartModule.Chart as unknown as Mock).mock
+      .results[0]!.value as { destroy: Mock };
 
     (el as unknown as { setConfig: (c: unknown) => void }).setConfig({
       type: "custom:xenia-home-card",
       show_chart: false,
     });
-    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    await (el as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
 
     expect(chartInstance.destroy).toHaveBeenCalled();
   });
@@ -280,8 +289,11 @@ describe("xenia-home-card mount", () => {
     const elEn = await mountCard(hassEn);
     await flush();
     (elEn as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (elEn as unknown as { updateComplete: Promise<unknown> }).updateComplete;
-    const dateEn = elEn.shadowRoot.querySelector(".shot-date")?.textContent?.trim();
+    await (elEn as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
+    const dateEn = elEn.shadowRoot
+      .querySelector(".shot-date")
+      ?.textContent?.trim();
 
     const hassDe = createMockHass({
       language: "de",
@@ -291,8 +303,11 @@ describe("xenia-home-card mount", () => {
     const elDe = await mountCard(hassDe);
     await flush();
     (elDe as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (elDe as unknown as { updateComplete: Promise<unknown> }).updateComplete;
-    const dateDe = elDe.shadowRoot.querySelector(".shot-date")?.textContent?.trim();
+    await (elDe as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
+    const dateDe = elDe.shadowRoot
+      .querySelector(".shot-date")
+      ?.textContent?.trim();
 
     expect(dateEn).toBeTruthy();
     expect(dateDe).toBeTruthy();
@@ -305,7 +320,7 @@ describe("xenia-home-card mount", () => {
       makeShot({ start_time: "2026-05-18T09:00:00+00:00" }),
     ];
     const hass = createMockHass({
-      states: { [ENTITY_ID]: makeEventState(shots[1]) },
+      states: { [ENTITY_ID]: makeEventState(shots[1]!) },
       history: { [ENTITY_ID]: shots.map(makeHistoryEntry) },
     });
     const el = await mountCard(hass);
@@ -315,10 +330,11 @@ describe("xenia-home-card mount", () => {
 
     const items = el.shadowRoot.querySelectorAll<HTMLElement>(".shot-item");
     // After history load, items[0] is the newest (shots[1]); click the older one.
-    items[1].click();
-    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    items[1]!.click();
+    await (el as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
 
-    expect(items[1].classList.contains("selected")).toBe(true);
+    expect(items[1]!.classList.contains("selected")).toBe(true);
     expect(ChartModule.Chart).toHaveBeenCalled();
   });
 
@@ -335,9 +351,11 @@ describe("xenia-home-card mount", () => {
     const el = await mountCard(hass);
     await flush();
     (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    await (el as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
 
-    const detailsText = el.shadowRoot.querySelector(".shot-details")?.textContent ?? "";
+    const detailsText =
+      el.shadowRoot.querySelector(".shot-details")?.textContent ?? "";
     expect(detailsText).not.toContain("Infinity");
     expect(detailsText).toContain("N/A");
   });
@@ -373,7 +391,9 @@ describe("xenia-home-card mount", () => {
     });
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(evictee) },
-      history: { [ENTITY_ID]: [makeHistoryEntry(evictee), makeHistoryEntry(middle)] },
+      history: {
+        [ENTITY_ID]: [makeHistoryEntry(evictee), makeHistoryEntry(middle)],
+      },
     });
     const el = await mountCard(hass, { max_shots: 2 });
     await flush();
@@ -393,10 +413,11 @@ describe("xenia-home-card mount", () => {
         },
       },
     });
-    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    await (el as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
 
     let texts = Array.from(el.shadowRoot.querySelectorAll(".shot-item")).map(
-      (i) => i.textContent ?? "",
+      (i) => i.textContent ?? ""
     );
     expect(texts.length).toBe(2);
     // Evictee gone, middle and third remain.
@@ -418,11 +439,12 @@ describe("xenia-home-card mount", () => {
         },
       },
     });
-    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    await (el as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
 
     // Still 2 items (max_shots), but evictee is back; the next-oldest got evicted.
     texts = Array.from(el.shadowRoot.querySelectorAll(".shot-item")).map(
-      (i) => i.textContent ?? "",
+      (i) => i.textContent ?? ""
     );
     expect(texts.length).toBe(2);
     expect(texts.some((t) => t.includes("11.1"))).toBe(true);
@@ -436,7 +458,9 @@ describe("getGridOptions", () => {
       history: { [ENTITY_ID]: [] },
     });
     const el = await mountCard(hass);
-    const grid = (el as unknown as { getGridOptions: () => unknown }).getGridOptions();
+    const grid = (
+      el as unknown as { getGridOptions: () => unknown }
+    ).getGridOptions();
     expect(grid).toEqual({
       columns: 12,
       rows: 6,
@@ -451,7 +475,9 @@ describe("getGridOptions", () => {
       history: { [ENTITY_ID]: [] },
     });
     const el = await mountCard(hass, { show_chart: false });
-    const grid = (el as unknown as { getGridOptions: () => unknown }).getGridOptions();
+    const grid = (
+      el as unknown as { getGridOptions: () => unknown }
+    ).getGridOptions();
     expect(grid).toEqual({
       columns: 12,
       rows: 3,
@@ -471,7 +497,8 @@ describe("card title fallback", () => {
     const el = await mountCard(hass);
     await flush();
     (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    await (el as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
 
     const title = el.shadowRoot.querySelector(".title")?.textContent?.trim();
     expect(title).toBe("Shot tracker — formatted");
@@ -486,7 +513,8 @@ describe("card title fallback", () => {
     const el = await mountCard(hass);
     await flush();
     (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+    await (el as unknown as { updateComplete: Promise<unknown> })
+      .updateComplete;
 
     const title = el.shadowRoot.querySelector(".title")?.textContent?.trim();
     expect(title).toBe("Espresso Shots");

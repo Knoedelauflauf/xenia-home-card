@@ -19,7 +19,7 @@ export function makeShot(overrides: Partial<ShotData> = {}): ShotData {
 
 export function makeEventState(
   shot: ShotData,
-  entityId = "event.xenia_espresso_machine_shot_tracker",
+  entityId = "event.xenia_espresso_machine_shot_tracker"
 ): HassEntity {
   return {
     entity_id: entityId,

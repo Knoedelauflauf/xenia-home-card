@@ -30,7 +30,7 @@ export interface HassLocale {
 export interface HomeAssistant {
   language: string;
   locale?: HassLocale;
-  states: { [entity_id: string]: HassEntity };
+  states: Record<string, HassEntity>;
   callService: (
     domain: string,
     service: string,
@@ -50,7 +50,7 @@ export interface HomeAssistant {
   formatEntityName?: (
     stateObj: HassEntity,
     nameConfig?: unknown,
-    options?: { format?: string },
+    options?: { format?: string }
   ) => string;
 }
 

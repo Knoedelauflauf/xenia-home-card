@@ -30,7 +30,7 @@ describe("getConfigForm()", () => {
   it("F14: assertConfig throws for chart_height below range", () => {
     const form = XeniaHomeCard.getConfigForm();
     expect(() =>
-      form.assertConfig!({ type: "custom:xenia-home-card", chart_height: -1 }),
+      form.assertConfig!({ type: "custom:xenia-home-card", chart_height: -1 })
     ).toThrow();
   });
 
@@ -41,7 +41,7 @@ describe("getConfigForm()", () => {
         type: "custom:xenia-home-card",
         chart_height: 200,
         max_shots: 10,
-      }),
+      })
     ).not.toThrow();
   });
 });

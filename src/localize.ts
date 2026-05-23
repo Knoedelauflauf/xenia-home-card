@@ -11,7 +11,9 @@ const DEFAULT_LANG = "en";
 function getNestedValue(obj: unknown, path: string): string | undefined {
   let current: unknown = obj;
   for (const key of path.split(".")) {
-    if (!current || typeof current !== "object" || !(key in current)) return undefined;
+    if (!current || typeof current !== "object" || !(key in current)) {
+      return undefined;
+    }
     current = (current as Record<string, unknown>)[key];
   }
   return typeof current === "string" ? current : undefined;
