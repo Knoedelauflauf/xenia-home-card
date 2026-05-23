@@ -7,7 +7,11 @@
     "build": "rollup -c",
     "watch": "rollup -c --watch",
     "lint": "eslint src/**/*.ts",
-    "format": "prettier --write src/**/*.ts"
+    "format": "prettier --write src/**/*.ts",
+    "type-check": "tsc --noEmit -p tsconfig.test.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "repository": {
     "type": "git",
@@ -23,17 +27,21 @@
   "author": "",
   "license": "MIT",
   "devDependencies": {
+    "@open-wc/testing-helpers": "^3.0.1",
     "@rollup/plugin-commonjs": "^28.0.0",
     "@rollup/plugin-json": "^6.1.0",
     "@rollup/plugin-node-resolve": "^16.0.0",
     "@rollup/plugin-terser": "^0.4.4",
     "@rollup/plugin-typescript": "^12.1.0",
-    "lit": "^3.2.0",
+    "@vitest/coverage-v8": "^4.1.7",
+    "happy-dom": "^20.9.0",
+    "lit": "^3.3.3",
     "rollup": "^4.24.0",
     "tslib": "^2.8.1",
-    "typescript": "^5.6.0"
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   },
   "dependencies": {
-    "chart.js": "^4.4.0"
+    "chart.js": "^4.5.1"
   }
 }

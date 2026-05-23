@@ -48,6 +48,11 @@ export interface HomeAssistant {
       subscription: Record<string, unknown>
     ) => Promise<() => void>;
   };
+  formatEntityName?: (
+    stateObj: HassEntity,
+    nameConfig?: unknown,
+    options?: { format?: string },
+  ) => string;
 }
 
 export interface HassEntity {

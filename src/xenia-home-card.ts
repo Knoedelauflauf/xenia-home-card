@@ -120,6 +120,23 @@ export class XeniaHomeCard extends LitElement {
     return localize(key, this.hass?.language);
   }
 
+  private _cardTitle(): string {
+    if (this._config.title) return this._config.title;
+    if (typeof this.hass?.formatEntityName === "function") {
+      const entityId = this._config.entity || this._findXeniaEntity();
+      if (entityId) {
+        const stateObj = this.hass.states[entityId];
+        if (stateObj) {
+          const name = this.hass.formatEntityName(stateObj, undefined, {
+            format: "entity",
+          });
+          if (name) return name;
+        }
+      }
+    }
+    return this._t("card.default_title");
+  }
+
   private _findXeniaEntity(): string | null {
     if (!this.hass?.states) return null;
 
@@ -146,7 +163,22 @@ export class XeniaHomeCard extends LitElement {
   }
 
   public getCardSize(): number {
-    return this._config?.show_chart ? 5 : 3;
+    return this._config?.show_chart !== false ? 5 : 3;
+  }
+
+  public getGridOptions(): {
+    columns: number;
+    rows: number;
+    min_columns: number;
+    min_rows: number;
+  } {
+    const hasChart = this._config?.show_chart !== false;
+    return {
+      columns: 12,
+      rows: hasChart ? 6 : 3,
+      min_columns: 6,
+      min_rows: 3,
+    };
   }
 
   protected firstUpdated(_changedProps: PropertyValues): void {
@@ -693,7 +725,7 @@ export class XeniaHomeCard extends LitElement {
     return html`
       <ha-card>
         <div class="card-header">
-          <span class="title">${this._config.title || this._t("card.default_title")}</span>
+          <span class="title">${this._cardTitle()}</span>
           <ha-icon-button
             .path=${"M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"}
             @click=${this._loadShotHistory}

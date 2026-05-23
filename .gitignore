@@ -6,3 +6,6 @@ node_modules/
 dist/*.d.ts
 dist/*.d.ts.map
 dist/*.js.map
+
+# Vitest coverage report
+coverage/
