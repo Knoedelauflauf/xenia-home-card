@@ -123,9 +123,17 @@ export class XeniaHomeCard extends LitElement {
   private _findXeniaEntity(): string | null {
     if (!this.hass?.states) return null;
 
-    // Look for xenia_home shot tracker entity
-    const entityIds = Object.keys(this.hass.states);
-    for (const entityId of entityIds) {
+    // Primary: match by event_types attribute (survives user renaming).
+    for (const [entityId, state] of Object.entries(this.hass.states)) {
+      if (!entityId.startsWith("event.")) continue;
+      const eventTypes = state.attributes?.event_types;
+      if (Array.isArray(eventTypes) && eventTypes.includes("shot_completed")) {
+        return entityId;
+      }
+    }
+
+    // Fallback: legacy string-prefix match for setups without event_types yet.
+    for (const entityId of Object.keys(this.hass.states)) {
       if (
         entityId.startsWith("event.xenia_espresso_machine") ||
         (entityId.startsWith("event.xenia_") && entityId.includes("shot_tracker"))
@@ -149,7 +157,19 @@ export class XeniaHomeCard extends LitElement {
 
   protected updated(changedProps: PropertyValues): void {
     super.updated(changedProps);
-    if (changedProps.has("_selectedShot") && this._selectedShot) {
+    if (
+      changedProps.has("_config") &&
+      this._config?.show_chart === false &&
+      this._chart
+    ) {
+      this._chart.destroy();
+      this._chart = null;
+    }
+    if (
+      changedProps.has("_selectedShot") &&
+      this._selectedShot &&
+      this._config?.show_chart !== false
+    ) {
       this._updateChart();
     }
     if (changedProps.has("hass") && this.hass) {
@@ -188,8 +208,8 @@ export class XeniaHomeCard extends LitElement {
           },
           eventType
         );
-      } catch {
-        console.warn("Could not subscribe to shot events");
+      } catch (err) {
+        console.error("Xenia Home Card: subscription failed", err);
       }
       return;
     }
@@ -197,34 +217,38 @@ export class XeniaHomeCard extends LitElement {
     const entityId = this._config.entity || this._findXeniaEntity();
     if (!entityId) return;
 
-    try {
-      // Subscribe to state_changed events for the shot tracker entity
-      this._unsubscribe = await this.hass.connection.subscribeEvents(
-        (event) => {
-          const data = event.data as {
-            entity_id?: string;
-            new_state?: {
-              attributes?: {
-                event_type?: string;
-              };
-            };
+    interface TriggerMessage {
+      variables?: {
+        trigger?: {
+          to_state?: {
+            attributes?: Record<string, unknown>;
           };
+        };
+      };
+    }
 
-          // Check if this is our entity and a shot_completed event
-          if (data.entity_id === entityId && data.new_state) {
-            const attributes = data.new_state.attributes;
-            if (attributes?.event_type !== "shot_completed") return;
-            const eventData = (attributes as unknown as ShotData);
-            const shotData = this._normalizeShotData(eventData);
-            if (shotData) {
-              this._pushShot(shotData);
-            }
+    try {
+      this._unsubscribe = await this.hass.connection.subscribeMessage<TriggerMessage>(
+        (message) => {
+          const newState = message?.variables?.trigger?.to_state;
+          if (!newState) return;
+          const attributes = newState.attributes;
+          if (attributes?.event_type !== "shot_completed") return;
+          const shotData = this._normalizeShotData(attributes);
+          if (shotData) {
+            this._pushShot(shotData);
           }
         },
-        "state_changed"
+        {
+          type: "subscribe_trigger",
+          trigger: {
+            platform: "state",
+            entity_id: entityId,
+          },
+        },
       );
-    } catch {
-      console.warn("Could not subscribe to shot events");
+    } catch (err) {
+      console.error("Xenia Home Card: subscription failed", err);
     }
   }
 
@@ -277,10 +301,9 @@ export class XeniaHomeCard extends LitElement {
       start_time: candidate.start_time,
       brew_end_time: candidate.brew_end_time ?? null,
       duration_seconds: candidate.duration_seconds,
-      afterflow_seconds:
-        typeof candidate.afterflow_seconds === "number"
-          ? candidate.afterflow_seconds
-          : undefined,
+      ...(typeof candidate.afterflow_seconds === "number"
+        ? { afterflow_seconds: candidate.afterflow_seconds }
+        : {}),
       timestamps: Array.isArray(candidate.timestamps) ? candidate.timestamps : [],
       brew_group_temps: Array.isArray(candidate.brew_group_temps)
         ? candidate.brew_group_temps
@@ -306,7 +329,6 @@ export class XeniaHomeCard extends LitElement {
     if (!this._selectedShot) {
       this._selectedShot = shotData;
     }
-    this.requestUpdate();
   }
 
   private async _loadShotHistory(): Promise<void> {
@@ -369,9 +391,15 @@ export class XeniaHomeCard extends LitElement {
         this._selectedShot = this._shots[0];
       }
     } catch (err) {
-      const detail = this._describeError(err);
-      this._error = `${this._t("card.load_error")}: ${detail}`;
-      console.error("Xenia Home Card: load history failed", err);
+      if (this._isUnknownCommandError(err)) {
+        console.info(
+          "Xenia Home Card: history integration not available; falling back to live events only",
+        );
+      } else {
+        const detail = this._describeError(err);
+        this._error = `${this._t("card.load_error")}: ${detail}`;
+        console.error("Xenia Home Card: load history failed", err);
+      }
     } finally {
       this._loading = false;
     }
@@ -597,6 +625,12 @@ export class XeniaHomeCard extends LitElement {
     return { min, max };
   }
 
+  private _isUnknownCommandError(err: unknown): boolean {
+    if (!err || typeof err !== "object") return false;
+    const code = (err as { code?: unknown }).code;
+    return code === "unknown_command";
+  }
+
   private _describeError(err: unknown): string {
     if (err instanceof Error) return err.message;
     if (err && typeof err === "object") {
@@ -614,7 +648,8 @@ export class XeniaHomeCard extends LitElement {
 
   private _formatDate(isoString: string): string {
     const date = new Date(isoString);
-    return date.toLocaleString("de-DE", {
+    const locale = this.hass?.locale?.language ?? this.hass?.language ?? undefined;
+    return date.toLocaleString(locale, {
       day: "2-digit",
       month: "2-digit",
       hour: "2-digit",

@@ -27,7 +27,7 @@ A Home Assistant Lovelace card for visualizing espresso shots from Xenia espress
 3. Click the three dots menu and select "Custom repositories"
 4. Add this repository URL and select "Lovelace" as the category
 5. Install "Xenia Home Card"
-6. Restart Home Assistant
+6. Refresh your browser (hard-reload: Ctrl+Shift+R / Cmd+Shift+R) to load the card
 
 ### Manual Installation
 

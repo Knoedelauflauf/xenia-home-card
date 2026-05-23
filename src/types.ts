@@ -1,5 +1,3 @@
-import { LovelaceCard, LovelaceCardConfig } from "custom-card-helpers";
-
 export interface ShotData {
   start_time: string;
   brew_end_time?: string | null;
@@ -23,8 +21,16 @@ export interface XeniaHomeCardConfig extends LovelaceCardConfig {
   max_shots?: number;
 }
 
+export interface HassLocale {
+  language?: string;
+  number_format?: string;
+  time_format?: string;
+  date_format?: string;
+}
+
 export interface HomeAssistant {
   language: string;
+  locale?: HassLocale;
   states: { [entity_id: string]: HassEntity };
   callService: (
     domain: string,
@@ -36,6 +42,10 @@ export interface HomeAssistant {
     subscribeEvents: (
       callback: (event: HassEvent) => void,
       eventType: string
+    ) => Promise<() => void>;
+    subscribeMessage: <T = unknown>(
+      callback: (message: T) => void,
+      subscription: Record<string, unknown>
     ) => Promise<() => void>;
   };
 }
@@ -53,6 +63,17 @@ export interface HassEvent {
   data: Record<string, unknown>;
   origin: string;
   time_fired: string;
+}
+
+export interface LovelaceCardConfig {
+  type: string;
+  [key: string]: unknown;
+}
+
+export interface LovelaceCard extends HTMLElement {
+  hass?: HomeAssistant;
+  setConfig(config: LovelaceCardConfig): void;
+  getCardSize?(): number;
 }
 
 declare global {
