@@ -12,7 +12,6 @@ export interface ShotData {
 }
 
 export interface XeniaHomeCardConfig extends LovelaceCardConfig {
-  type: string;
   entity?: string;
   event_type?: string;
   title?: string;

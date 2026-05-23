@@ -33,6 +33,58 @@ console.info(
   "color: #8b4513; background: white; font-weight: bold;"
 );
 
+interface TriggerMessage {
+  variables?: {
+    trigger?: {
+      to_state?: {
+        attributes?: Record<string, unknown>;
+      };
+    };
+  };
+}
+
+interface HistoryState {
+  s: string; // state
+  a: {       // attributes
+    event_type?: string;
+  };
+  lu: number; // last_updated timestamp
+}
+
+function makeEndLinePlugin(
+  brewEndTime: number | null,
+  lastTime: number,
+): { id: string; afterDraw: (chart: Chart) => void } {
+  return {
+    id: "shotEndLine",
+    afterDraw: (chart: Chart) => {
+      if (brewEndTime === null) return;
+      const xScale = chart.scales.x;
+      const { top, bottom } = chart.chartArea;
+      const xEnd = xScale.getPixelForValue(brewEndTime);
+      const chartCtx = chart.ctx;
+
+      if (lastTime > brewEndTime + 0.001) {
+        const xLast = xScale.getPixelForValue(lastTime);
+        chartCtx.save();
+        chartCtx.fillStyle = "rgba(52, 152, 219, 0.08)";
+        chartCtx.fillRect(xEnd, top, xLast - xEnd, bottom - top);
+        chartCtx.restore();
+      }
+
+      chartCtx.save();
+      chartCtx.strokeStyle = "rgba(0, 0, 0, 0.6)";
+      chartCtx.setLineDash([6, 4]);
+      chartCtx.lineWidth = 2;
+      chartCtx.beginPath();
+      chartCtx.moveTo(xEnd, top);
+      chartCtx.lineTo(xEnd, bottom);
+      chartCtx.stroke();
+      chartCtx.restore();
+    },
+  };
+}
+
 @customElement("xenia-home-card")
 export class XeniaHomeCard extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
@@ -45,6 +97,7 @@ export class XeniaHomeCard extends LitElement {
   private _chart: Chart | null = null;
   private _unsubscribe: (() => void) | null = null;
   private _shotKeys = new Set<string>();
+  private _resolvedEntity: string | null = null;
 
   static getConfigForm() {
     return {
@@ -114,6 +167,7 @@ export class XeniaHomeCard extends LitElement {
       max_shots: 10,
       ...config,
     };
+    this._resolvedEntity = null;
   }
 
   private _t(key: string): string {
@@ -122,19 +176,12 @@ export class XeniaHomeCard extends LitElement {
 
   private _cardTitle(): string {
     if (this._config.title) return this._config.title;
-    if (typeof this.hass?.formatEntityName === "function") {
-      const entityId = this._config.entity || this._findXeniaEntity();
-      if (entityId) {
-        const stateObj = this.hass.states[entityId];
-        if (stateObj) {
-          const name = this.hass.formatEntityName(stateObj, undefined, {
-            format: "entity",
-          });
-          if (name) return name;
-        }
-      }
-    }
-    return this._t("card.default_title");
+    const fmt = this.hass?.formatEntityName;
+    if (typeof fmt !== "function") return this._t("card.default_title");
+    const entityId = this._resolveEntityId();
+    const stateObj = entityId ? this.hass.states[entityId] : undefined;
+    if (!stateObj) return this._t("card.default_title");
+    return fmt.call(this.hass, stateObj, undefined, { format: "entity" }) || this._t("card.default_title");
   }
 
   private _findXeniaEntity(): string | null {
@@ -162,6 +209,20 @@ export class XeniaHomeCard extends LitElement {
     return null;
   }
 
+  private _resolveEntityId(): string | null {
+    // Cache hit only if cached entity still exists in hass.states (handles
+    // entity rename / removal); otherwise invalidate and re-resolve.
+    if (this._resolvedEntity && this.hass?.states?.[this._resolvedEntity]) {
+      return this._resolvedEntity;
+    }
+    this._resolvedEntity = null;
+    const resolved = this._config?.entity || this._findXeniaEntity();
+    if (resolved) {
+      this._resolvedEntity = resolved;
+    }
+    return resolved;
+  }
+
   public getCardSize(): number {
     return this._config?.show_chart !== false ? 5 : 3;
   }
@@ -181,8 +242,8 @@ export class XeniaHomeCard extends LitElement {
     };
   }
 
-  protected firstUpdated(_changedProps: PropertyValues): void {
-    super.firstUpdated(_changedProps);
+  protected firstUpdated(changedProps: PropertyValues): void {
+    super.firstUpdated(changedProps);
     this._loadShotHistory();
     this._subscribeToEvents();
   }
@@ -205,7 +266,7 @@ export class XeniaHomeCard extends LitElement {
       this._updateChart();
     }
     if (changedProps.has("hass") && this.hass) {
-      const entityId = this._config?.entity || this._findXeniaEntity();
+      const entityId = this._resolveEntityId();
       if (entityId && this._error) {
         this._error = null;
         this._loadShotHistory();
@@ -246,18 +307,8 @@ export class XeniaHomeCard extends LitElement {
       return;
     }
 
-    const entityId = this._config.entity || this._findXeniaEntity();
+    const entityId = this._resolveEntityId();
     if (!entityId) return;
-
-    interface TriggerMessage {
-      variables?: {
-        trigger?: {
-          to_state?: {
-            attributes?: Record<string, unknown>;
-          };
-        };
-      };
-    }
 
     try {
       this._unsubscribe = await this.hass.connection.subscribeMessage<TriggerMessage>(
@@ -328,6 +379,7 @@ export class XeniaHomeCard extends LitElement {
     ) {
       return null;
     }
+    const arr = (v: unknown): number[] => (Array.isArray(v) ? (v as number[]) : []);
 
     return {
       start_time: candidate.start_time,
@@ -336,28 +388,22 @@ export class XeniaHomeCard extends LitElement {
       ...(typeof candidate.afterflow_seconds === "number"
         ? { afterflow_seconds: candidate.afterflow_seconds }
         : {}),
-      timestamps: Array.isArray(candidate.timestamps) ? candidate.timestamps : [],
-      brew_group_temps: Array.isArray(candidate.brew_group_temps)
-        ? candidate.brew_group_temps
-        : [],
-      brew_boiler_temps: Array.isArray(candidate.brew_boiler_temps)
-        ? candidate.brew_boiler_temps
-        : [],
-      pump_pressures: Array.isArray(candidate.pump_pressures)
-        ? candidate.pump_pressures
-        : [],
-      flow_rates: Array.isArray(candidate.flow_rates) ? candidate.flow_rates : [],
-      weights: Array.isArray(candidate.weights) ? candidate.weights : [],
+      timestamps: arr(candidate.timestamps),
+      brew_group_temps: arr(candidate.brew_group_temps),
+      brew_boiler_temps: arr(candidate.brew_boiler_temps),
+      pump_pressures: arr(candidate.pump_pressures),
+      flow_rates: arr(candidate.flow_rates),
+      weights: arr(candidate.weights),
     };
   }
 
   private _pushShot(shotData: ShotData): void {
-    const key = this._shotKey(shotData);
+    const key = shotData.start_time;
     if (this._shotKeys.has(key)) {
       return;
     }
-    this._shotKeys.add(key);
     this._shots = [shotData, ...this._shots].slice(0, this._config.max_shots);
+    this._shotKeys = new Set(this._shots.map((shot) => shot.start_time));
     if (!this._selectedShot) {
       this._selectedShot = shotData;
     }
@@ -370,9 +416,9 @@ export class XeniaHomeCard extends LitElement {
     try {
       // Auto-detect entity if not configured
       const eventType = this._config.event_type?.trim();
-      const entityId = this._config.entity || this._findXeniaEntity();
+      const entityId = this._resolveEntityId();
 
-      if (!entityId || typeof entityId !== "string") {
+      if (!entityId) {
         if (eventType) {
           this._loading = false;
           return;
@@ -386,14 +432,6 @@ export class XeniaHomeCard extends LitElement {
       const endTime = new Date();
       const startTime = new Date();
       startTime.setDate(startTime.getDate() - 30); // Last 30 days
-
-      interface HistoryState {
-        s: string; // state
-        a: {       // attributes
-          event_type?: string;
-        };
-        lu: number; // last_updated timestamp
-      }
 
       const history = await this.hass.callWS<Record<string, HistoryState[]>>({
         type: "history/history_during_period",
@@ -472,85 +510,36 @@ export class XeniaHomeCard extends LitElement {
     const brewEndTime = this._getBrewEndTime(shot);
     const lastTime =
       shot.timestamps.length > 0 ? shot.timestamps[shot.timestamps.length - 1] : 0;
-    const endLinePlugin = {
-      id: "shotEndLine",
-      afterDraw: (chart: Chart) => {
-        if (brewEndTime === null) return;
-        const xScale = chart.scales.x;
-        const { top, bottom } = chart.chartArea;
-        const xEnd = xScale.getPixelForValue(brewEndTime);
-        const chartCtx = chart.ctx;
+    const endLinePlugin = makeEndLinePlugin(brewEndTime, lastTime);
 
-        if (lastTime > brewEndTime + 0.001) {
-          const xLast = xScale.getPixelForValue(lastTime);
-          chartCtx.save();
-          chartCtx.fillStyle = "rgba(52, 152, 219, 0.08)";
-          chartCtx.fillRect(xEnd, top, xLast - xEnd, bottom - top);
-          chartCtx.restore();
-        }
-
-        chartCtx.save();
-        chartCtx.strokeStyle = "rgba(0, 0, 0, 0.6)";
-        chartCtx.setLineDash([6, 4]);
-        chartCtx.lineWidth = 2;
-        chartCtx.beginPath();
-        chartCtx.moveTo(xEnd, top);
-        chartCtx.lineTo(xEnd, bottom);
-        chartCtx.stroke();
-        chartCtx.restore();
-      },
-    };
+    const seriesDefs: Array<{
+      label: string;
+      data: Array<{ x: number; y: number }>;
+      border: string;
+      bg: string;
+      axis: string;
+      fill: boolean;
+    }> = [
+      { label: this._t("chart.pressure"),         data: pumpPressures,    border: "#e74c3c", bg: "rgba(231, 76, 60, 0.1)",  axis: "y-pressure", fill: true  },
+      { label: this._t("chart.flow"),             data: flowRates,        border: "#3498db", bg: "rgba(52, 152, 219, 0.1)", axis: "y-flow",     fill: true  },
+      { label: this._t("chart.weight"),           data: weights,          border: "#2ecc71", bg: "rgba(46, 204, 113, 0.1)", axis: "y-weight",   fill: true  },
+      { label: this._t("chart.brew_group_temp"),  data: brewGroupTemps,   border: "#f39c12", bg: "rgba(243, 156, 18, 0.1)", axis: "y-temp",     fill: false },
+      { label: this._t("chart.brew_boiler_temp"), data: brewBoilerTemps,  border: "#9b59b6", bg: "rgba(155, 89, 182, 0.1)", axis: "y-temp",     fill: false },
+    ];
+    const datasets = seriesDefs.map((s) => ({
+      label: s.label,
+      data: s.data,
+      borderColor: s.border,
+      backgroundColor: s.bg,
+      yAxisID: s.axis,
+      tension: 0.3,
+      fill: s.fill,
+    }));
 
     this._chart = new Chart(ctx, {
       type: "line",
       data: {
-        datasets: [
-          {
-            label: this._t("chart.pressure"),
-            data: pumpPressures,
-            borderColor: "#e74c3c",
-            backgroundColor: "rgba(231, 76, 60, 0.1)",
-            yAxisID: "y-pressure",
-            tension: 0.3,
-            fill: true,
-          },
-          {
-            label: this._t("chart.flow"),
-            data: flowRates,
-            borderColor: "#3498db",
-            backgroundColor: "rgba(52, 152, 219, 0.1)",
-            yAxisID: "y-flow",
-            tension: 0.3,
-            fill: true,
-          },
-          {
-            label: this._t("chart.weight"),
-            data: weights,
-            borderColor: "#2ecc71",
-            backgroundColor: "rgba(46, 204, 113, 0.1)",
-            yAxisID: "y-weight",
-            tension: 0.3,
-            fill: true,
-          },
-          {
-            label: this._t("chart.brew_group_temp"),
-            data: brewGroupTemps,
-            borderColor: "#f39c12",
-            backgroundColor: "rgba(243, 156, 18, 0.1)",
-            yAxisID: "y-temp",
-            tension: 0.3,
-            fill: false,
-          },
-          {
-            label: this._t("chart.brew_boiler_temp"),
-            data: brewBoilerTemps,
-            borderColor: "#9b59b6",
-            backgroundColor: "rgba(155, 89, 182, 0.1)",
-            yAxisID: "y-temp",
-            tension: 0.3,
-            fill: false,
-          },
-        ],
+        datasets,
       },
       options: {
         responsive: true,
@@ -700,15 +689,21 @@ export class XeniaHomeCard extends LitElement {
     return `${avg.toFixed(1)}${unit}`;
   }
 
-  private _shotKey(shot: ShotData): string {
-    return shot.start_time;
+  private _formatLast(values: number[], unit: string): string {
+    if (!values.length) return this._t("details.not_available");
+    return `${values[values.length - 1].toFixed(1)}${unit}`;
+  }
+
+  private _formatMax(values: number[], unit: string): string {
+    if (!values.length) return this._t("details.not_available");
+    return `${Math.max(...values).toFixed(1)}${unit}`;
   }
 
   private _dedupeShots(shots: ShotData[]): ShotData[] {
     const unique: ShotData[] = [];
     const keys = new Set<string>();
     for (const shot of shots) {
-      const key = this._shotKey(shot);
+      const key = shot.start_time;
       if (keys.has(key)) continue;
       keys.add(key);
       unique.push(shot);
@@ -771,15 +766,11 @@ export class XeniaHomeCard extends LitElement {
               </span>
               <span class="detail">
                 <ha-icon icon="mdi:weight-gram"></ha-icon>
-                ${this._selectedShot.weights.length > 0
-                  ? `${this._selectedShot.weights[this._selectedShot.weights.length - 1].toFixed(1)}g`
-                  : this._t("details.not_available")}
+                ${this._formatLast(this._selectedShot.weights, "g")}
               </span>
               <span class="detail">
                 <ha-icon icon="mdi:gauge"></ha-icon>
-                ${this._selectedShot.pump_pressures.length > 0
-                  ? `${Math.max(...this._selectedShot.pump_pressures).toFixed(1)} bar`
-                  : this._t("details.not_available")}
+                ${this._formatMax(this._selectedShot.pump_pressures, " bar")}
               </span>
             </div>
           `

@@ -73,6 +73,12 @@ HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement) {
 
 const ENTITY_ID = "event.xenia_espresso_machine_shot_tracker";
 
+// Lets the async history-load microtasks settle after mount. 20ms is empirically
+// enough in happy-dom; raise per-test if a specific case needs longer.
+function flush(ms = 20): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
 async function mountCard(hass: ReturnType<typeof createMockHass>, config = {}) {
   const el = await fixture(html`<xenia-home-card></xenia-home-card>`);
   (el as unknown as { setConfig: (c: unknown) => void }).setConfig({
@@ -95,8 +101,7 @@ describe("xenia-home-card mount", () => {
       history: { [ENTITY_ID]: [] },
     });
     const el = await mountCard(hass);
-    // Allow async _loadShotHistory to settle.
-    await new Promise((r) => setTimeout(r, 10));
+    await flush(10);
     (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
     await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
     const empty = el.shadowRoot.querySelector(".empty");
@@ -114,7 +119,7 @@ describe("xenia-home-card mount", () => {
       history: { [ENTITY_ID]: shots.map(makeHistoryEntry) },
     });
     const el = await mountCard(hass);
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
     (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
     await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
 
@@ -133,7 +138,7 @@ describe("xenia-home-card mount", () => {
       history: { [ENTITY_ID]: [makeHistoryEntry(initial)] },
     });
     const el = await mountCard(hass);
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
 
     const newShot = makeShot({ start_time: "2026-05-18T09:30:00+00:00" });
     hass.__triggerCallback!({
@@ -161,7 +166,7 @@ describe("xenia-home-card mount", () => {
       history: { [ENTITY_ID]: [makeHistoryEntry(initial)] },
     });
     const el = await mountCard(hass);
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
 
     // Fire the same shot twice.
     for (let i = 0; i < 2; i++) {
@@ -190,7 +195,7 @@ describe("xenia-home-card mount", () => {
       history: { [ENTITY_ID]: [makeHistoryEntry(initial)] },
     });
     const el = await mountCard(hass);
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
 
     hass.__triggerCallback!({
       variables: {
@@ -219,7 +224,7 @@ describe("xenia-home-card mount", () => {
       history: { [renamedEntityId]: [makeHistoryEntry(shot)] },
     });
     await mountCard(hass);
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
 
     const historyCall = hass.callWS.mock.calls.find(
       (c) => (c[0] as { type: string }).type === "history/history_during_period",
@@ -236,7 +241,7 @@ describe("xenia-home-card mount", () => {
       history: { [ENTITY_ID]: [makeHistoryEntry(makeShot())] },
     });
     const el = await mountCard(hass, { show_chart: false });
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
     (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
     await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
 
@@ -249,7 +254,7 @@ describe("xenia-home-card mount", () => {
       history: { [ENTITY_ID]: [makeHistoryEntry(makeShot())] },
     });
     const el = await mountCard(hass, { show_chart: true });
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
 
     // Confirm chart was constructed.
     expect(ChartModule.Chart).toHaveBeenCalled();
@@ -273,7 +278,7 @@ describe("xenia-home-card mount", () => {
       history: { [ENTITY_ID]: [makeHistoryEntry(shot)] },
     });
     const elEn = await mountCard(hassEn);
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
     (elEn as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
     await (elEn as unknown as { updateComplete: Promise<unknown> }).updateComplete;
     const dateEn = elEn.shadowRoot.querySelector(".shot-date")?.textContent?.trim();
@@ -284,7 +289,7 @@ describe("xenia-home-card mount", () => {
       history: { [ENTITY_ID]: [makeHistoryEntry(shot)] },
     });
     const elDe = await mountCard(hassDe);
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
     (elDe as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
     await (elDe as unknown as { updateComplete: Promise<unknown> }).updateComplete;
     const dateDe = elDe.shadowRoot.querySelector(".shot-date")?.textContent?.trim();
@@ -304,7 +309,7 @@ describe("xenia-home-card mount", () => {
       history: { [ENTITY_ID]: shots.map(makeHistoryEntry) },
     });
     const el = await mountCard(hass);
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
 
     (ChartModule.Chart as unknown as Mock).mockClear();
 
@@ -328,7 +333,7 @@ describe("xenia-home-card mount", () => {
       history: { [ENTITY_ID]: [makeHistoryEntry(shotNoPressure)] },
     });
     const el = await mountCard(hass);
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
     (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
     await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
 
@@ -343,10 +348,84 @@ describe("xenia-home-card mount", () => {
       history: { [ENTITY_ID]: [makeHistoryEntry(makeShot())] },
     });
     const el = await mountCard(hass);
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
 
     el.remove();
     expect(hass.__unsubscribeSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("evicted shot can re-enter via live event after max_shots eviction", async () => {
+    // max_shots=2, start with 2 shots, push a third (evicts oldest), then
+    // re-push the evicted one — it should reappear in the list.
+    // Each shot has a unique duration_seconds so we can identify it in the
+    // rendered output without depending on timezone-formatted timestamps.
+    const evictee = makeShot({
+      start_time: "2026-05-18T08:00:00+00:00",
+      duration_seconds: 11.1,
+    });
+    const middle = makeShot({
+      start_time: "2026-05-18T09:00:00+00:00",
+      duration_seconds: 22.2,
+    });
+    const third = makeShot({
+      start_time: "2026-05-18T10:00:00+00:00",
+      duration_seconds: 33.3,
+    });
+    const hass = createMockHass({
+      states: { [ENTITY_ID]: makeEventState(evictee) },
+      history: { [ENTITY_ID]: [makeHistoryEntry(evictee), makeHistoryEntry(middle)] },
+    });
+    const el = await mountCard(hass, { max_shots: 2 });
+    await flush();
+
+    expect(el.shadowRoot.querySelectorAll(".shot-item").length).toBe(2);
+
+    // Push a third shot → evicts the oldest (evictee).
+    hass.__triggerCallback!({
+      variables: {
+        trigger: {
+          to_state: {
+            attributes: {
+              event_type: "shot_completed",
+              ...(third as unknown as Record<string, unknown>),
+            },
+          },
+        },
+      },
+    });
+    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+
+    let texts = Array.from(el.shadowRoot.querySelectorAll(".shot-item")).map(
+      (i) => i.textContent ?? "",
+    );
+    expect(texts.length).toBe(2);
+    // Evictee gone, middle and third remain.
+    expect(texts.some((t) => t.includes("11.1"))).toBe(false);
+    expect(texts.some((t) => t.includes("22.2"))).toBe(true);
+    expect(texts.some((t) => t.includes("33.3"))).toBe(true);
+
+    // Re-fire the evicted shot. With the bug, it'd be silently dropped because
+    // its key is still in _shotKeys. With the fix, it re-enters.
+    hass.__triggerCallback!({
+      variables: {
+        trigger: {
+          to_state: {
+            attributes: {
+              event_type: "shot_completed",
+              ...(evictee as unknown as Record<string, unknown>),
+            },
+          },
+        },
+      },
+    });
+    await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
+
+    // Still 2 items (max_shots), but evictee is back; the next-oldest got evicted.
+    texts = Array.from(el.shadowRoot.querySelectorAll(".shot-item")).map(
+      (i) => i.textContent ?? "",
+    );
+    expect(texts.length).toBe(2);
+    expect(texts.some((t) => t.includes("11.1"))).toBe(true);
   });
 });
 
@@ -390,7 +469,7 @@ describe("card title fallback", () => {
       formatEntityName: () => "Shot tracker — formatted",
     });
     const el = await mountCard(hass);
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
     (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
     await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
 
@@ -405,7 +484,7 @@ describe("card title fallback", () => {
       history: { [ENTITY_ID]: [] },
     });
     const el = await mountCard(hass);
-    await new Promise((r) => setTimeout(r, 20));
+    await flush();
     (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
     await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
 
