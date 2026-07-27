@@ -1,6 +1,6 @@
 {
   "name": "xenia-home-card",
-  "version": "0.2.0-beta.0",
+  "version": "0.2.0",
   "description": "Home Assistant Lovelace card for visualizing espresso shots from the Xenia espresso machine",
   "main": "dist/xenia-home-card.js",
   "scripts": {

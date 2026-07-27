@@ -26,7 +26,7 @@ Chart.register(
   Filler
 );
 
-const CARD_VERSION = "0.2.0-beta.0";
+const CARD_VERSION = "0.2.0";
 
 console.info(
   `%c XENIA-HOME-CARD %c ${CARD_VERSION} `,
