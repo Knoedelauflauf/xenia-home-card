@@ -1,8 +1,20 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
-import { fixture } from "@open-wc/testing-helpers";
-import { html } from "lit";
-import { createMockHass } from "./helpers/mock-hass";
-import { makeShot, makeEventState, makeHistoryEntry } from "./helpers/fixtures";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  type Mock,
+} from "vitest";
+import { createMockHass, type MockHass } from "./helpers/mock-hass";
+import {
+  makeShot,
+  makeEventState,
+  makeIdleEventState,
+  makeHistoryEntry,
+} from "./helpers/fixtures";
+import type { HassEntity } from "../src/types";
 
 // Mock Chart.js — patch with a proper constructor so `new Chart(ctx, ...)` works.
 vi.mock("chart.js", () => {
@@ -75,38 +87,72 @@ HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement) {
 
 const ENTITY_ID = "event.xenia_espresso_machine_shot_tracker";
 
+interface CardElement extends HTMLElement {
+  shadowRoot: ShadowRoot;
+  hass: MockHass;
+  setConfig: (config: unknown) => void;
+  updateComplete: Promise<unknown>;
+  requestUpdate: () => void;
+  getGridOptions: () => unknown;
+}
+
 // Lets the async history-load microtasks settle after mount. 20ms is empirically
 // enough in happy-dom; raise per-test if a specific case needs longer.
 function flush(ms = 20): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function mountCard(hass: ReturnType<typeof createMockHass>, config = {}) {
-  const el = await fixture(html`<xenia-home-card></xenia-home-card>`);
-  (el as unknown as { setConfig: (c: unknown) => void }).setConfig({
-    type: "custom:xenia-home-card",
-    ...config,
-  });
-  (el as unknown as { hass: typeof hass }).hass = hass;
-  await (el as unknown as { updateComplete: Promise<unknown> }).updateComplete;
-  return el as HTMLElement & { shadowRoot: ShadowRoot };
+const mounted: CardElement[] = [];
+
+// Mirrors Lovelace: config and hass are set before the card is attached, so
+// firstUpdated already sees both.
+async function mountCard(hass: MockHass, config = {}): Promise<CardElement> {
+  const el = document.createElement("xenia-home-card") as CardElement;
+  el.setConfig({ type: "custom:xenia-home-card", ...config });
+  el.hass = hass;
+  document.body.appendChild(el);
+  mounted.push(el);
+  await el.updateComplete;
+  return el;
 }
+
+// Simulates a state change: Lovelace hands the card a fresh hass object with
+// a fresh states map. Returns the new hass so callers can chain updates.
+async function pushHass(
+  el: CardElement,
+  hass: MockHass,
+  states: Record<string, HassEntity>
+): Promise<MockHass> {
+  const next: MockHass = { ...hass, states };
+  el.hass = next;
+  await el.updateComplete;
+  return next;
+}
+
+function shotItems(el: CardElement): NodeListOf<Element> {
+  return el.shadowRoot.querySelectorAll(".shot-item");
+}
+
+afterEach(() => {
+  for (const el of mounted.splice(0)) {
+    el.remove();
+  }
+});
 
 describe("xenia-home-card mount", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("renders with no shots when history is empty", async () => {
+  it("renders with no shots when the entity is idle and history is empty", async () => {
     const hass = createMockHass({
-      states: { [ENTITY_ID]: makeEventState(makeShot()) },
+      states: { [ENTITY_ID]: makeIdleEventState() },
       history: { [ENTITY_ID]: [] },
     });
     const el = await mountCard(hass);
     await flush(10);
-    (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (el as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
+    el.requestUpdate();
+    await el.updateComplete;
     const empty = el.shadowRoot.querySelector(".empty");
     expect(empty).not.toBeNull();
   });
@@ -123,11 +169,10 @@ describe("xenia-home-card mount", () => {
     });
     const el = await mountCard(hass);
     await flush();
-    (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (el as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
+    el.requestUpdate();
+    await el.updateComplete;
 
-    const items = el.shadowRoot.querySelectorAll(".shot-item");
+    const items = shotItems(el);
     expect(items.length).toBe(3);
     expect(items[0]!.classList.contains("selected")).toBe(true);
 
@@ -135,7 +180,7 @@ describe("xenia-home-card mount", () => {
     expect(canvas).not.toBeNull();
   });
 
-  it("F2: live shot via subscribe_trigger appears at top of list", async () => {
+  it("F2: live shot via hass state change appears in the list", async () => {
     const initial = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(initial) },
@@ -145,26 +190,12 @@ describe("xenia-home-card mount", () => {
     await flush();
 
     const newShot = makeShot({ start_time: "2026-05-18T09:30:00+00:00" });
-    hass.__triggerCallback!({
-      variables: {
-        trigger: {
-          to_state: {
-            attributes: {
-              event_type: "shot_completed",
-              ...(newShot as unknown as Record<string, unknown>),
-            },
-          },
-        },
-      },
-    });
-    await (el as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
+    await pushHass(el, hass, { [ENTITY_ID]: makeEventState(newShot) });
 
-    const items = el.shadowRoot.querySelectorAll(".shot-item");
-    expect(items.length).toBe(2);
+    expect(shotItems(el).length).toBe(2);
   });
 
-  it("F3: duplicate start_time does not produce a second entry", async () => {
+  it("F3: state change with a duplicate start_time does not produce a second entry", async () => {
     const initial = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(initial) },
@@ -173,25 +204,73 @@ describe("xenia-home-card mount", () => {
     const el = await mountCard(hass);
     await flush();
 
-    // Fire the same shot twice.
-    for (let i = 0; i < 2; i++) {
-      hass.__triggerCallback!({
-        variables: {
-          trigger: {
-            to_state: {
-              attributes: {
-                event_type: "shot_completed",
-                ...(initial as unknown as Record<string, unknown>),
-              },
-            },
-          },
-        },
-      });
-    }
-    await (el as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
+    // New trigger timestamp, same shot attributes.
+    await pushHass(el, hass, {
+      [ENTITY_ID]: makeEventState(initial, ENTITY_ID, {
+        state: "2026-05-18T08:00:05+00:00",
+      }),
+    });
 
-    expect(el.shadowRoot.querySelectorAll(".shot-item").length).toBe(1);
+    expect(shotItems(el).length).toBe(1);
+  });
+
+  it("attribute-only update (is_brewing flip) does not push a shot", async () => {
+    const initial = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
+    const hass = createMockHass({
+      states: { [ENTITY_ID]: makeEventState(initial) },
+      history: { [ENTITY_ID]: [makeHistoryEntry(initial)] },
+    });
+    const el = await mountCard(hass);
+    await flush();
+
+    // Unchanged state, but attributes carry a different start_time — without
+    // the state guard this would (wrongly) appear as a new shot.
+    const sneaky = makeShot({ start_time: "2026-05-18T10:00:00+00:00" });
+    await pushHass(el, hass, {
+      [ENTITY_ID]: makeEventState(sneaky, ENTITY_ID, {
+        state: initial.start_time,
+        attributes: { is_brewing: true },
+      }),
+    });
+
+    expect(shotItems(el).length).toBe(1);
+  });
+
+  it("first sighting of the entity pushes its current shot without history", async () => {
+    const shot = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
+    const hass = createMockHass({
+      states: { [ENTITY_ID]: makeEventState(shot) },
+      history: {},
+    });
+    const el = await mountCard(hass);
+    await flush();
+    el.requestUpdate();
+    await el.updateComplete;
+
+    expect(shotItems(el).length).toBe(1);
+  });
+
+  it("entity re-resolution resets the last-seen state marker", async () => {
+    const shotA = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
+    const shotB = makeShot({ start_time: "2026-05-18T09:00:00+00:00" });
+    const renamedEntityId = "event.kaffee";
+    const hass = createMockHass({
+      states: { [ENTITY_ID]: makeEventState(shotA) },
+      history: {},
+    });
+    const el = await mountCard(hass);
+    await flush();
+    expect(shotItems(el).length).toBe(1);
+
+    // Entity renamed: old id gone, new id carries a new shot but the exact
+    // same state string — only a reset marker lets it through.
+    await pushHass(el, hass, {
+      [renamedEntityId]: makeEventState(shotB, renamedEntityId, {
+        state: shotA.start_time,
+      }),
+    });
+
+    expect(shotItems(el).length).toBe(2);
   });
 
   it("F4: malformed payload (missing duration_seconds) is ignored", async () => {
@@ -203,23 +282,13 @@ describe("xenia-home-card mount", () => {
     const el = await mountCard(hass);
     await flush();
 
-    hass.__triggerCallback!({
-      variables: {
-        trigger: {
-          to_state: {
-            attributes: {
-              event_type: "shot_completed",
-              start_time: "2026-05-18T11:00:00+00:00",
-              // duration_seconds intentionally missing
-            },
-          },
-        },
-      },
-    });
-    await (el as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
+    const bad = makeEventState(
+      makeShot({ start_time: "2026-05-18T11:00:00+00:00" })
+    );
+    delete bad.attributes.duration_seconds;
+    await pushHass(el, hass, { [ENTITY_ID]: bad });
 
-    expect(el.shadowRoot.querySelectorAll(".shot-item").length).toBe(1);
+    expect(shotItems(el).length).toBe(1);
   });
 
   it("F6: auto-detect finds entity renamed to event.kaffee via event_types", async () => {
@@ -249,9 +318,8 @@ describe("xenia-home-card mount", () => {
     });
     const el = await mountCard(hass, { show_chart: false });
     await flush();
-    (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (el as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
+    el.requestUpdate();
+    await el.updateComplete;
 
     expect(el.shadowRoot.querySelector("#shot-chart")).toBeNull();
   });
@@ -269,12 +337,11 @@ describe("xenia-home-card mount", () => {
     const chartInstance = (ChartModule.Chart as unknown as Mock).mock
       .results[0]!.value as { destroy: Mock };
 
-    (el as unknown as { setConfig: (c: unknown) => void }).setConfig({
+    el.setConfig({
       type: "custom:xenia-home-card",
       show_chart: false,
     });
-    await (el as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
+    await el.updateComplete;
 
     expect(chartInstance.destroy).toHaveBeenCalled();
   });
@@ -288,9 +355,8 @@ describe("xenia-home-card mount", () => {
     });
     const elEn = await mountCard(hassEn);
     await flush();
-    (elEn as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (elEn as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
+    elEn.requestUpdate();
+    await elEn.updateComplete;
     const dateEn = elEn.shadowRoot
       .querySelector(".shot-date")
       ?.textContent?.trim();
@@ -302,9 +368,8 @@ describe("xenia-home-card mount", () => {
     });
     const elDe = await mountCard(hassDe);
     await flush();
-    (elDe as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (elDe as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
+    elDe.requestUpdate();
+    await elDe.updateComplete;
     const dateDe = elDe.shadowRoot
       .querySelector(".shot-date")
       ?.textContent?.trim();
@@ -331,8 +396,7 @@ describe("xenia-home-card mount", () => {
     const items = el.shadowRoot.querySelectorAll<HTMLElement>(".shot-item");
     // After history load, items[0] is the newest (shots[1]); click the older one.
     items[1]!.click();
-    await (el as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
+    await el.updateComplete;
 
     expect(items[1]!.classList.contains("selected")).toBe(true);
     expect(ChartModule.Chart).toHaveBeenCalled();
@@ -350,9 +414,8 @@ describe("xenia-home-card mount", () => {
     });
     const el = await mountCard(hass);
     await flush();
-    (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (el as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
+    el.requestUpdate();
+    await el.updateComplete;
 
     const detailsText =
       el.shadowRoot.querySelector(".shot-details")?.textContent ?? "";
@@ -360,19 +423,7 @@ describe("xenia-home-card mount", () => {
     expect(detailsText).toContain("N/A");
   });
 
-  it("F12: disconnectedCallback unsubscribes from the trigger", async () => {
-    const hass = createMockHass({
-      states: { [ENTITY_ID]: makeEventState(makeShot()) },
-      history: { [ENTITY_ID]: [makeHistoryEntry(makeShot())] },
-    });
-    const el = await mountCard(hass);
-    await flush();
-
-    el.remove();
-    expect(hass.__unsubscribeSpy).toHaveBeenCalledTimes(1);
-  });
-
-  it("evicted shot can re-enter via live event after max_shots eviction", async () => {
+  it("evicted shot can re-enter via live state change after max_shots eviction", async () => {
     // max_shots=2, start with 2 shots, push a third (evicts oldest), then
     // re-push the evicted one — it should reappear in the list.
     // Each shot has a unique duration_seconds so we can identify it in the
@@ -390,7 +441,7 @@ describe("xenia-home-card mount", () => {
       duration_seconds: 33.3,
     });
     const hass = createMockHass({
-      states: { [ENTITY_ID]: makeEventState(evictee) },
+      states: { [ENTITY_ID]: makeEventState(middle) },
       history: {
         [ENTITY_ID]: [makeHistoryEntry(evictee), makeHistoryEntry(middle)],
       },
@@ -398,27 +449,14 @@ describe("xenia-home-card mount", () => {
     const el = await mountCard(hass, { max_shots: 2 });
     await flush();
 
-    expect(el.shadowRoot.querySelectorAll(".shot-item").length).toBe(2);
+    expect(shotItems(el).length).toBe(2);
 
     // Push a third shot → evicts the oldest (evictee).
-    hass.__triggerCallback!({
-      variables: {
-        trigger: {
-          to_state: {
-            attributes: {
-              event_type: "shot_completed",
-              ...(third as unknown as Record<string, unknown>),
-            },
-          },
-        },
-      },
+    const next = await pushHass(el, hass, {
+      [ENTITY_ID]: makeEventState(third),
     });
-    await (el as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
 
-    let texts = Array.from(el.shadowRoot.querySelectorAll(".shot-item")).map(
-      (i) => i.textContent ?? ""
-    );
+    let texts = Array.from(shotItems(el)).map((i) => i.textContent ?? "");
     expect(texts.length).toBe(2);
     // Evictee gone, middle and third remain.
     expect(texts.some((t) => t.includes("11.1"))).toBe(false);
@@ -427,27 +465,131 @@ describe("xenia-home-card mount", () => {
 
     // Re-fire the evicted shot. With the bug, it'd be silently dropped because
     // its key is still in _shotKeys. With the fix, it re-enters.
-    hass.__triggerCallback!({
-      variables: {
-        trigger: {
-          to_state: {
-            attributes: {
-              event_type: "shot_completed",
-              ...(evictee as unknown as Record<string, unknown>),
-            },
-          },
-        },
-      },
-    });
-    await (el as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
+    await pushHass(el, next, { [ENTITY_ID]: makeEventState(evictee) });
 
     // Still 2 items (max_shots), but evictee is back; the next-oldest got evicted.
-    texts = Array.from(el.shadowRoot.querySelectorAll(".shot-item")).map(
-      (i) => i.textContent ?? ""
-    );
+    texts = Array.from(shotItems(el)).map((i) => i.textContent ?? "");
     expect(texts.length).toBe(2);
     expect(texts.some((t) => t.includes("11.1"))).toBe(true);
+  });
+});
+
+describe("event_type escape hatch", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("subscribes to the configured event type and delivers shots", async () => {
+    const hass = createMockHass({ states: {}, history: {} });
+    const el = await mountCard(hass, { event_type: "my_shot_event" });
+    await flush();
+
+    expect(hass.connection.subscribeEvents).toHaveBeenCalledWith(
+      expect.any(Function),
+      "my_shot_event"
+    );
+
+    hass.__eventCallback!({
+      event_type: "my_shot_event",
+      data: makeShot() as unknown as Record<string, unknown>,
+    });
+    await el.updateComplete;
+
+    expect(shotItems(el).length).toBe(1);
+  });
+
+  it("entity state changes push nothing while event_type is configured", async () => {
+    const raw = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
+    const hass = createMockHass({
+      states: { [ENTITY_ID]: makeEventState(raw) },
+      history: { [ENTITY_ID]: [] },
+    });
+    const el = await mountCard(hass, { event_type: "my_shot_event" });
+    await flush();
+
+    // Neither the first sighting nor a later state change may deliver the
+    // entity's shot — the escape hatch bypasses the integration's updates.
+    expect(shotItems(el).length).toBe(0);
+    const next = makeShot({ start_time: "2026-05-18T09:30:00+00:00" });
+    await pushHass(el, hass, { [ENTITY_ID]: makeEventState(next) });
+    expect(shotItems(el).length).toBe(0);
+
+    // The custom event remains the sole delivery path, even for a shot with
+    // the same start_time the entity already announced.
+    hass.__eventCallback!({
+      event_type: "my_shot_event",
+      data: next as unknown as Record<string, unknown>,
+    });
+    await el.updateComplete;
+    expect(shotItems(el).length).toBe(1);
+  });
+
+  it("F12: disconnectedCallback unsubscribes from the event bus", async () => {
+    const hass = createMockHass({ states: {}, history: {} });
+    const el = await mountCard(hass, { event_type: "my_shot_event" });
+    await flush();
+
+    el.remove();
+    expect(hass.__unsubscribeSpy).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("brewing indicator", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("shows the indicator while is_brewing is true", async () => {
+    const shot = makeShot();
+    const hass = createMockHass({
+      states: {
+        [ENTITY_ID]: makeEventState(shot, ENTITY_ID, {
+          attributes: { is_brewing: true },
+        }),
+      },
+      history: { [ENTITY_ID]: [makeHistoryEntry(shot)] },
+    });
+    const el = await mountCard(hass);
+
+    const indicator = el.shadowRoot.querySelector(".brewing-indicator");
+    expect(indicator).not.toBeNull();
+    expect(indicator!.textContent).toContain("Brewing");
+  });
+
+  it("hides the indicator when is_brewing is false", async () => {
+    const shot = makeShot();
+    const hass = createMockHass({
+      states: { [ENTITY_ID]: makeEventState(shot) },
+      history: { [ENTITY_ID]: [makeHistoryEntry(shot)] },
+    });
+    const el = await mountCard(hass);
+
+    expect(el.shadowRoot.querySelector(".brewing-indicator")).toBeNull();
+  });
+
+  it("toggles with attribute-only hass updates", async () => {
+    const shot = makeShot();
+    const hass = createMockHass({
+      states: { [ENTITY_ID]: makeEventState(shot) },
+      history: { [ENTITY_ID]: [makeHistoryEntry(shot)] },
+    });
+    const el = await mountCard(hass);
+    await flush();
+    expect(el.shadowRoot.querySelector(".brewing-indicator")).toBeNull();
+
+    const brewing = await pushHass(el, hass, {
+      [ENTITY_ID]: makeEventState(shot, ENTITY_ID, {
+        attributes: { is_brewing: true },
+      }),
+    });
+    expect(el.shadowRoot.querySelector(".brewing-indicator")).not.toBeNull();
+
+    await pushHass(el, brewing, {
+      [ENTITY_ID]: makeEventState(shot, ENTITY_ID, {
+        attributes: { is_brewing: false },
+      }),
+    });
+    expect(el.shadowRoot.querySelector(".brewing-indicator")).toBeNull();
   });
 });
 
@@ -458,9 +600,7 @@ describe("getGridOptions", () => {
       history: { [ENTITY_ID]: [] },
     });
     const el = await mountCard(hass);
-    const grid = (
-      el as unknown as { getGridOptions: () => unknown }
-    ).getGridOptions();
+    const grid = el.getGridOptions();
     expect(grid).toEqual({
       columns: 12,
       rows: 6,
@@ -475,9 +615,7 @@ describe("getGridOptions", () => {
       history: { [ENTITY_ID]: [] },
     });
     const el = await mountCard(hass, { show_chart: false });
-    const grid = (
-      el as unknown as { getGridOptions: () => unknown }
-    ).getGridOptions();
+    const grid = el.getGridOptions();
     expect(grid).toEqual({
       columns: 12,
       rows: 3,
@@ -496,9 +634,8 @@ describe("card title fallback", () => {
     });
     const el = await mountCard(hass);
     await flush();
-    (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (el as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
+    el.requestUpdate();
+    await el.updateComplete;
 
     const title = el.shadowRoot.querySelector(".title")?.textContent?.trim();
     expect(title).toBe("Shot tracker — formatted");
@@ -512,9 +649,8 @@ describe("card title fallback", () => {
     });
     const el = await mountCard(hass);
     await flush();
-    (el as unknown as { requestUpdate: () => Promise<void> }).requestUpdate();
-    await (el as unknown as { updateComplete: Promise<unknown> })
-      .updateComplete;
+    el.requestUpdate();
+    await el.updateComplete;
 
     const title = el.shadowRoot.querySelector(".title")?.textContent?.trim();
     expect(title).toBe("Espresso Shots");

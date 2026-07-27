@@ -42,10 +42,6 @@ export interface HomeAssistant {
       callback: (event: HassEvent) => void,
       eventType: string
     ) => Promise<() => void>;
-    subscribeMessage: <T = unknown>(
-      callback: (message: T) => void,
-      subscription: Record<string, unknown>
-    ) => Promise<() => void>;
   };
   formatEntityName?: (
     stateObj: HassEntity,

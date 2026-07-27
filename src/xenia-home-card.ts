@@ -1,6 +1,6 @@
 import type { PropertyValues, TemplateResult } from "lit";
 import { LitElement, html, css } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
 import {
   Chart,
   LineController,
@@ -33,16 +33,6 @@ console.info(
   "color: white; background: #8b4513; font-weight: bold;",
   "color: #8b4513; background: white; font-weight: bold;"
 );
-
-interface TriggerMessage {
-  variables?: {
-    trigger?: {
-      to_state?: {
-        attributes?: Record<string, unknown>;
-      };
-    };
-  };
-}
 
 interface HistoryState {
   s: string; // state
@@ -88,7 +78,6 @@ function makeEndLinePlugin(
   };
 }
 
-@customElement("xenia-home-card")
 export class XeniaHomeCard extends LitElement {
   @property({ attribute: false }) public hass!: HomeAssistant;
   @state() private _config!: XeniaHomeCardConfig;
@@ -101,6 +90,8 @@ export class XeniaHomeCard extends LitElement {
   private _unsubscribe: (() => void) | null = null;
   private _shotKeys = new Set<string>();
   private _resolvedEntity: string | null = null;
+  private _lastShotEntity: string | null = null;
+  private _lastShotState: string | null = null;
 
   static getConfigForm() {
     return {
@@ -182,6 +173,12 @@ export class XeniaHomeCard extends LitElement {
     return localize(key, this.hass?.language);
   }
 
+  private _isBrewing(): boolean {
+    const entityId = this._resolveEntityId();
+    if (!entityId) return false;
+    return this.hass?.states?.[entityId]?.attributes?.is_brewing === true;
+  }
+
   private _cardTitle(): string {
     if (this._config.title) return this._config.title;
     const fmt = this.hass?.formatEntityName;
@@ -260,6 +257,20 @@ export class XeniaHomeCard extends LitElement {
     this._subscribeToEvents();
   }
 
+  protected willUpdate(changedProps: PropertyValues): void {
+    super.willUpdate(changedProps);
+    // With `event_type` configured, shots arrive solely via the event bus
+    // subscription; skip the entity path so the entity's own shot_completed
+    // update cannot race or duplicate the custom event's payload.
+    if (
+      changedProps.has("hass") &&
+      this.hass &&
+      !this._config?.event_type?.trim()
+    ) {
+      this._processEntityState(this._resolveEntityId());
+    }
+  }
+
   protected updated(changedProps: PropertyValues): void {
     super.updated(changedProps);
     if (
@@ -270,8 +281,10 @@ export class XeniaHomeCard extends LitElement {
       this._chart.destroy();
       this._chart = null;
     }
+    // Also re-render the chart when loading finishes: a shot may have been
+    // selected while the loading placeholder was shown and no canvas existed.
     if (
-      changedProps.has("_selectedShot") &&
+      (changedProps.has("_selectedShot") || changedProps.has("_loading")) &&
       this._selectedShot &&
       this._config?.show_chart !== false
     ) {
@@ -299,52 +312,56 @@ export class XeniaHomeCard extends LitElement {
     }
   }
 
+  // Escape hatch: with `event_type` configured, listen on the event bus
+  // directly instead of the shot tracker entity. Shot delivery for the
+  // default entity-based setup happens in willUpdate() via hass updates.
   private async _subscribeToEvents(): Promise<void> {
-    if (!this.hass) return;
+    if (!this.hass || this._unsubscribe) return;
 
     const eventType = this._config.event_type?.trim();
-    if (eventType) {
-      try {
-        this._unsubscribe = await this.hass.connection.subscribeEvents(
-          (event) => {
-            const shotData = this._getShotDataFromEvent(event.data);
-            if (!shotData) return;
-            this._pushShot(shotData);
-          },
-          eventType
-        );
-      } catch (err) {
-        console.error("Xenia Home Card: subscription failed", err);
-      }
-      return;
-    }
-
-    const entityId = this._resolveEntityId();
-    if (!entityId) return;
+    if (!eventType) return;
 
     try {
-      this._unsubscribe =
-        await this.hass.connection.subscribeMessage<TriggerMessage>(
-          (message) => {
-            const newState = message?.variables?.trigger?.to_state;
-            if (!newState) return;
-            const attributes = newState.attributes;
-            if (attributes?.event_type !== "shot_completed") return;
-            const shotData = this._normalizeShotData(attributes);
-            if (shotData) {
-              this._pushShot(shotData);
-            }
-          },
-          {
-            type: "subscribe_trigger",
-            trigger: {
-              platform: "state",
-              entity_id: entityId,
-            },
-          }
-        );
+      this._unsubscribe = await this.hass.connection.subscribeEvents(
+        (event) => {
+          const shotData = this._getShotDataFromEvent(event.data);
+          if (!shotData) return;
+          this._pushShot(shotData);
+        },
+        eventType
+      );
     } catch (err) {
       console.error("Xenia Home Card: subscription failed", err);
+    }
+  }
+
+  // Lovelace hands the card a fresh hass object on every state change; this
+  // is the live-update path for shots and needs no privileged subscription.
+  // The event entity's state is the trigger timestamp — it changes on every
+  // completed shot, while attribute-only updates (is_brewing flips on each
+  // poll) leave it untouched. A state change with event_type
+  // "shot_completed" therefore identifies a new shot. The first sighting of
+  // an entity (including after a config change or rename) also pushes its
+  // current shot: _pushShot dedupes by start_time, so overlap with the
+  // history backfill is harmless, and users without recorder access still
+  // see the latest shot.
+  private _processEntityState(entityId: string | null): void {
+    if (!entityId) {
+      this._lastShotEntity = null;
+      this._lastShotState = null;
+      return;
+    }
+    if (entityId !== this._lastShotEntity) {
+      this._lastShotEntity = entityId;
+      this._lastShotState = null;
+    }
+    const stateObj = this.hass.states[entityId];
+    if (!stateObj || stateObj.state === this._lastShotState) return;
+    this._lastShotState = stateObj.state;
+    if (stateObj.attributes?.event_type !== "shot_completed") return;
+    const shotData = this._normalizeShotData(stateObj.attributes);
+    if (shotData) {
+      this._pushShot(shotData);
     }
   }
 
@@ -470,7 +487,12 @@ export class XeniaHomeCard extends LitElement {
           .filter((shot): shot is ShotData => Boolean(shot))
           .reverse(); // Most recent first
 
-        this._shots = this._dedupeShots(shots).slice(0, this._config.max_shots);
+        // Merge behind shots already delivered live: the recorder may lag
+        // behind the most recent shot, and dedupe keeps overlap harmless.
+        this._shots = this._dedupeShots([...this._shots, ...shots]).slice(
+          0,
+          this._config.max_shots
+        );
       }
 
       this._selectedShot = this._shots[0] ?? null;
@@ -775,6 +797,11 @@ export class XeniaHomeCard extends LitElement {
       <ha-card>
         <div class="card-header">
           <span class="title">${this._cardTitle()}</span>
+          ${this._isBrewing()
+            ? html`<span class="brewing-indicator">
+                <span class="brewing-dot"></span>${this._t("card.brewing")}
+              </span>`
+            : ""}
           <ha-icon-button
             .path=${"M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"}
             @click=${this._loadShotHistory}
@@ -881,8 +908,36 @@ export class XeniaHomeCard extends LitElement {
     }
 
     .title {
+      flex: 1;
       font-size: 1.1em;
       font-weight: 500;
+    }
+
+    .brewing-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.85em;
+      color: var(--secondary-text-color);
+      margin-right: 4px;
+    }
+
+    .brewing-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--primary-color);
+      animation: brewing-pulse 1.2s ease-in-out infinite;
+    }
+
+    @keyframes brewing-pulse {
+      0%,
+      100% {
+        opacity: 1;
+      }
+      50% {
+        opacity: 0.3;
+      }
     }
 
     .card-content {
@@ -984,10 +1039,18 @@ declare global {
   }
 }
 
+// A custom element name can only be defined once per page; a second load of
+// this module (e.g. after editing the resource URL) must not throw.
+if (!customElements.get("xenia-home-card")) {
+  customElements.define("xenia-home-card", XeniaHomeCard);
+}
+
 window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "xenia-home-card",
-  name: "Xenia Home Card",
-  description: "Visualize espresso shots from your Xenia espresso machine",
-  preview: true,
-});
+if (!window.customCards.some((card) => card.type === "xenia-home-card")) {
+  window.customCards.push({
+    type: "xenia-home-card",
+    name: "Xenia Home Card",
+    description: "Visualize espresso shots from your Xenia espresso machine",
+    preview: true,
+  });
+}

@@ -4,7 +4,8 @@
     "no_shots": "No shots recorded yet",
     "no_entity": "No Xenia event entity found",
     "load_error": "Failed to load shot history",
-    "default_title": "Espresso Shots"
+    "default_title": "Espresso Shots",
+    "brewing": "Brewing..."
   },
   "chart": {
     "pressure": "Pressure (bar)",

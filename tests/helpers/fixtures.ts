@@ -17,21 +17,49 @@ export function makeShot(overrides: Partial<ShotData> = {}): ShotData {
   return { ...SHOT_BASE, ...overrides };
 }
 
+// The real entity's state is the trigger timestamp; the shot's start_time is
+// a close stand-in that likewise changes on every shot. `overrides.state`
+// decouples the two for tests that need them to diverge, and
+// `overrides.attributes` layers extra attributes (e.g. is_brewing) on top.
 export function makeEventState(
   shot: ShotData,
-  entityId = "event.xenia_espresso_machine_shot_tracker"
+  entityId = "event.xenia_espresso_machine_shot_tracker",
+  overrides: {
+    state?: string;
+    attributes?: Record<string, unknown>;
+  } = {}
 ): HassEntity {
   return {
     entity_id: entityId,
-    state: shot.start_time,
+    state: overrides.state ?? shot.start_time,
     attributes: {
       event_type: "shot_completed",
       event_types: ["shot_completed"],
       friendly_name: "Shot tracker",
+      is_brewing: false,
       ...(shot as unknown as Record<string, unknown>),
+      ...(overrides.attributes ?? {}),
     },
     last_changed: shot.start_time,
     last_updated: shot.start_time,
+  };
+}
+
+// An event entity that has not fired yet: state "unknown", no event_type or
+// shot attributes, but event_types present so auto-detection still works.
+export function makeIdleEventState(
+  entityId = "event.xenia_espresso_machine_shot_tracker"
+): HassEntity {
+  return {
+    entity_id: entityId,
+    state: "unknown",
+    attributes: {
+      event_types: ["shot_completed"],
+      friendly_name: "Shot tracker",
+      is_brewing: false,
+    },
+    last_changed: "2026-05-18T07:00:00+00:00",
+    last_updated: "2026-05-18T07:00:00+00:00",
   };
 }
 

@@ -1,24 +1,12 @@
 import { vi, type Mock } from "vitest";
 import type { HomeAssistant, HassEntity } from "../../src/types";
 
-export interface MockTriggerMessage {
-  variables: {
-    trigger: {
-      to_state: {
-        attributes: Record<string, unknown>;
-      };
-    };
-  };
-}
-
 export interface MockHass extends HomeAssistant {
   callWS: Mock;
   connection: HomeAssistant["connection"] & {
     subscribeEvents: Mock;
-    subscribeMessage: Mock;
   };
   formatEntityName?: Mock;
-  __triggerCallback?: (msg: MockTriggerMessage) => void;
   __eventCallback?: (event: unknown) => void;
   __unsubscribeSpy: Mock;
 }
@@ -49,12 +37,6 @@ export function createMockHass(options: CreateMockHassOptions = {}): MockHass {
         .fn()
         .mockImplementation((cb: (e: unknown) => void) => {
           mock.__eventCallback = cb;
-          return Promise.resolve(unsubscribeSpy);
-        }),
-      subscribeMessage: vi
-        .fn()
-        .mockImplementation((cb: (msg: MockTriggerMessage) => void) => {
-          mock.__triggerCallback = cb;
           return Promise.resolve(unsubscribeSpy);
         }),
     },
