@@ -70,10 +70,34 @@ chart_height: 250
 max_shots: 20
 ```
 
+### Advanced
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `event_type` | string | (unset) | Custom event bus type to subscribe to for shot data (YAML only) |
+
+Setting `event_type` switches the card from the integration's shot tracker
+entity to events of that type on the Home Assistant event bus. This is meant
+for users who fire their own events carrying shot data (e.g. from
+automations). The event data must contain the shot fields (`start_time`,
+`duration_seconds`, `timestamps`, `pump_pressures`, `flow_rates`, `weights`),
+either directly or nested under `event_data`, `shot`, or `shot_data`.
+
+> [!NOTE]
+> `event_type` is not needed with the Xenia Espresso Machine integration and
+> receives nothing from it — with it set, the integration's live shot updates
+> are bypassed.
+
 ## Requirements
 
 - Home Assistant
-- Xenia Espresso Machine integration installed and configured
+- Xenia Espresso Machine integration version 0.4.0 or newer installed and configured (the card reads its shot tracker event entity, introduced in 0.4.0)
+
+> [!NOTE]
+> Shot history is backfilled via the `recorder` and `history` integrations
+> (enabled by default in Home Assistant). Without them the card shows live
+> shots only, and excluding the shot tracker event entity from the recorder
+> leaves the history empty.
 
 ## Development
 
