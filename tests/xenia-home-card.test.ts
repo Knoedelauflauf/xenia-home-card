@@ -12,7 +12,6 @@ import {
   makeShot,
   makeEventState,
   makeIdleEventState,
-  makeHistoryEntry,
 } from "./helpers/fixtures";
 import type { HassEntity } from "../src/types";
 
@@ -147,7 +146,6 @@ describe("xenia-home-card mount", () => {
   it("renders with no shots when the entity is idle and history is empty", async () => {
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeIdleEventState() },
-      history: { [ENTITY_ID]: [] },
     });
     const el = await mountCard(hass);
     await flush(10);
@@ -165,7 +163,7 @@ describe("xenia-home-card mount", () => {
     ];
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(shots[2]!) },
-      history: { [ENTITY_ID]: shots.map(makeHistoryEntry) },
+      shots,
     });
     const el = await mountCard(hass);
     await flush();
@@ -184,7 +182,7 @@ describe("xenia-home-card mount", () => {
     const initial = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(initial) },
-      history: { [ENTITY_ID]: [makeHistoryEntry(initial)] },
+      shots: [initial],
     });
     const el = await mountCard(hass);
     await flush();
@@ -199,7 +197,7 @@ describe("xenia-home-card mount", () => {
     const initial = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(initial) },
-      history: { [ENTITY_ID]: [makeHistoryEntry(initial)] },
+      shots: [initial],
     });
     const el = await mountCard(hass);
     await flush();
@@ -218,7 +216,7 @@ describe("xenia-home-card mount", () => {
     const initial = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(initial) },
-      history: { [ENTITY_ID]: [makeHistoryEntry(initial)] },
+      shots: [initial],
     });
     const el = await mountCard(hass);
     await flush();
@@ -240,7 +238,6 @@ describe("xenia-home-card mount", () => {
     const shot = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(shot) },
-      history: {},
     });
     const el = await mountCard(hass);
     await flush();
@@ -256,7 +253,6 @@ describe("xenia-home-card mount", () => {
     const renamedEntityId = "event.kaffee";
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(shotA) },
-      history: {},
     });
     const el = await mountCard(hass);
     await flush();
@@ -277,7 +273,7 @@ describe("xenia-home-card mount", () => {
     const initial = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(initial) },
-      history: { [ENTITY_ID]: [makeHistoryEntry(initial)] },
+      shots: [initial],
     });
     const el = await mountCard(hass);
     await flush();
@@ -293,28 +289,28 @@ describe("xenia-home-card mount", () => {
 
   it("F6: auto-detect finds entity renamed to event.kaffee via event_types", async () => {
     const renamedEntityId = "event.kaffee";
-    const shot = makeShot();
-    const renamedState = makeEventState(shot, renamedEntityId);
     const hass = createMockHass({
-      states: { [renamedEntityId]: renamedState },
-      history: { [renamedEntityId]: [makeHistoryEntry(shot)] },
+      states: { [renamedEntityId]: makeIdleEventState(renamedEntityId) },
     });
-    await mountCard(hass);
+    const el = await mountCard(hass);
     await flush();
+    expect(shotItems(el).length).toBe(0);
 
-    const historyCall = hass.callWS.mock.calls.find(
-      (c) => (c[0] as { type: string }).type === "history/history_during_period"
-    );
-    expect(historyCall).toBeDefined();
-    expect((historyCall![0] as { entity_ids: string[] }).entity_ids).toContain(
-      renamedEntityId
-    );
+    // event.kaffee matches neither legacy fallback string; only the
+    // event_types-based auto-detect can have resolved it, so a shot
+    // arriving on this entity proves that resolution worked.
+    const shot = makeShot();
+    await pushHass(el, hass, {
+      [renamedEntityId]: makeEventState(shot, renamedEntityId),
+    });
+
+    expect(shotItems(el).length).toBe(1);
   });
 
   it("F7: show_chart: false hides the canvas", async () => {
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(makeShot()) },
-      history: { [ENTITY_ID]: [makeHistoryEntry(makeShot())] },
+      shots: [makeShot()],
     });
     const el = await mountCard(hass, { show_chart: false });
     await flush();
@@ -327,7 +323,7 @@ describe("xenia-home-card mount", () => {
   it("F8: toggling show_chart off destroys the chart instance", async () => {
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(makeShot()) },
-      history: { [ENTITY_ID]: [makeHistoryEntry(makeShot())] },
+      shots: [makeShot()],
     });
     const el = await mountCard(hass, { show_chart: true });
     await flush();
@@ -351,7 +347,7 @@ describe("xenia-home-card mount", () => {
     const hassEn = createMockHass({
       language: "en",
       states: { [ENTITY_ID]: makeEventState(shot) },
-      history: { [ENTITY_ID]: [makeHistoryEntry(shot)] },
+      shots: [shot],
     });
     const elEn = await mountCard(hassEn);
     await flush();
@@ -364,7 +360,7 @@ describe("xenia-home-card mount", () => {
     const hassDe = createMockHass({
       language: "de",
       states: { [ENTITY_ID]: makeEventState(shot) },
-      history: { [ENTITY_ID]: [makeHistoryEntry(shot)] },
+      shots: [shot],
     });
     const elDe = await mountCard(hassDe);
     await flush();
@@ -386,7 +382,7 @@ describe("xenia-home-card mount", () => {
     ];
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(shots[1]!) },
-      history: { [ENTITY_ID]: shots.map(makeHistoryEntry) },
+      shots,
     });
     const el = await mountCard(hass);
     await flush();
@@ -410,7 +406,7 @@ describe("xenia-home-card mount", () => {
     const hass = createMockHass({
       language: "en",
       states: { [ENTITY_ID]: makeEventState(shotNoPressure) },
-      history: { [ENTITY_ID]: [makeHistoryEntry(shotNoPressure)] },
+      shots: [shotNoPressure],
     });
     const el = await mountCard(hass);
     await flush();
@@ -442,9 +438,7 @@ describe("xenia-home-card mount", () => {
     });
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(middle) },
-      history: {
-        [ENTITY_ID]: [makeHistoryEntry(evictee), makeHistoryEntry(middle)],
-      },
+      shots: [evictee, middle],
     });
     const el = await mountCard(hass, { max_shots: 2 });
     await flush();
@@ -472,6 +466,30 @@ describe("xenia-home-card mount", () => {
     expect(texts.length).toBe(2);
     expect(texts.some((t) => t.includes("11.1"))).toBe(true);
   });
+
+  it("requests full payloads exactly for the listed shot ids", async () => {
+    const shot = makeShot();
+    const hass = createMockHass({
+      states: { [ENTITY_ID]: makeIdleEventState() },
+      shots: [shot],
+    });
+    await mountCard(hass);
+    const getCall = hass.callWS.mock.calls.find(
+      (c) => (c[0] as { type: string }).type === "xenia_home/shots/get"
+    );
+    expect(getCall?.[0]).toMatchObject({ shot_ids: [shot.start_time] });
+  });
+
+  it("shows the integration version hint on unknown_command", async () => {
+    const hass = createMockHass({
+      states: { [ENTITY_ID]: makeIdleEventState() },
+    });
+    hass.callWS = vi.fn().mockRejectedValue({ code: "unknown_command" });
+    const card = await mountCard(hass);
+    expect(card.shadowRoot?.textContent).toContain(
+      "Requires Xenia Home integration 0.7.0 or newer"
+    );
+  });
 });
 
 describe("event_type escape hatch", () => {
@@ -480,7 +498,7 @@ describe("event_type escape hatch", () => {
   });
 
   it("subscribes to the configured event type and delivers shots", async () => {
-    const hass = createMockHass({ states: {}, history: {} });
+    const hass = createMockHass({ states: {} });
     const el = await mountCard(hass, { event_type: "my_shot_event" });
     await flush();
 
@@ -502,7 +520,6 @@ describe("event_type escape hatch", () => {
     const raw = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(raw) },
-      history: { [ENTITY_ID]: [] },
     });
     const el = await mountCard(hass, { event_type: "my_shot_event" });
     await flush();
@@ -525,7 +542,7 @@ describe("event_type escape hatch", () => {
   });
 
   it("F12: disconnectedCallback unsubscribes from the event bus", async () => {
-    const hass = createMockHass({ states: {}, history: {} });
+    const hass = createMockHass({ states: {} });
     const el = await mountCard(hass, { event_type: "my_shot_event" });
     await flush();
 
@@ -547,7 +564,7 @@ describe("brewing indicator", () => {
           attributes: { is_brewing: true },
         }),
       },
-      history: { [ENTITY_ID]: [makeHistoryEntry(shot)] },
+      shots: [shot],
     });
     const el = await mountCard(hass);
 
@@ -560,7 +577,7 @@ describe("brewing indicator", () => {
     const shot = makeShot();
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(shot) },
-      history: { [ENTITY_ID]: [makeHistoryEntry(shot)] },
+      shots: [shot],
     });
     const el = await mountCard(hass);
 
@@ -571,7 +588,7 @@ describe("brewing indicator", () => {
     const shot = makeShot();
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(shot) },
-      history: { [ENTITY_ID]: [makeHistoryEntry(shot)] },
+      shots: [shot],
     });
     const el = await mountCard(hass);
     await flush();
@@ -597,7 +614,6 @@ describe("getGridOptions", () => {
   it("returns 6 rows when show_chart is true (default)", async () => {
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(makeShot()) },
-      history: { [ENTITY_ID]: [] },
     });
     const el = await mountCard(hass);
     const grid = el.getGridOptions();
@@ -612,7 +628,6 @@ describe("getGridOptions", () => {
   it("returns 3 rows when show_chart is false", async () => {
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(makeShot()) },
-      history: { [ENTITY_ID]: [] },
     });
     const el = await mountCard(hass, { show_chart: false });
     const grid = el.getGridOptions();
@@ -629,7 +644,6 @@ describe("card title fallback", () => {
   it("uses hass.formatEntityName when no title is configured and helper exists", async () => {
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(makeShot()) },
-      history: { [ENTITY_ID]: [] },
       formatEntityName: () => "Shot tracker — formatted",
     });
     const el = await mountCard(hass);
@@ -645,7 +659,6 @@ describe("card title fallback", () => {
     const hass = createMockHass({
       language: "en",
       states: { [ENTITY_ID]: makeEventState(makeShot()) },
-      history: { [ENTITY_ID]: [] },
     });
     const el = await mountCard(hass);
     await flush();

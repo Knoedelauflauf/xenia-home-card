@@ -2,8 +2,8 @@
   "card": {
     "loading": "Loading...",
     "no_shots": "No shots recorded yet",
-    "no_entity": "No Xenia event entity found",
     "load_error": "Failed to load shot history",
+    "integration_outdated": "Requires Xenia Home integration 0.7.0 or newer",
     "default_title": "Espresso Shots",
     "brewing": "Brewing..."
   },

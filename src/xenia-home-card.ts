@@ -12,7 +12,12 @@ import {
   Legend,
   Filler,
 } from "chart.js";
-import type { ShotData, XeniaHomeCardConfig, HomeAssistant } from "./types";
+import type {
+  ShotData,
+  ShotSummary,
+  XeniaHomeCardConfig,
+  HomeAssistant,
+} from "./types";
 import { localize } from "./localize";
 
 Chart.register(
@@ -33,15 +38,6 @@ console.info(
   "color: white; background: #8b4513; font-weight: bold;",
   "color: #8b4513; background: white; font-weight: bold;"
 );
-
-interface HistoryState {
-  s: string; // state
-  a: {
-    // attributes
-    event_type?: string;
-  };
-  lu: number; // last_updated timestamp
-}
 
 function makeEndLinePlugin(
   brewEndTime: number | null,
@@ -85,6 +81,7 @@ export class XeniaHomeCard extends LitElement {
   @state() private _selectedShot: ShotData | null = null;
   @state() private _loading = true;
   @state() private _error: string | null = null;
+  @state() private _integrationOutdated = false;
 
   private _chart: Chart | null = null;
   private _unsubscribe: (() => void) | null = null;
@@ -445,62 +442,36 @@ export class XeniaHomeCard extends LitElement {
   private async _loadShotHistory(): Promise<void> {
     this._loading = true;
     this._error = null;
+    this._integrationOutdated = false;
 
     try {
-      // Auto-detect entity if not configured
-      const eventType = this._config.event_type?.trim();
-      const entityId = this._resolveEntityId();
-
-      if (!entityId) {
-        if (eventType) {
-          this._loading = false;
-          return;
-        }
-        this._error = this._t("card.no_entity");
-        this._loading = false;
-        return;
-      }
-
-      // Use Home Assistant's history API to get past events
-      const endTime = new Date();
-      const startTime = new Date();
-      startTime.setDate(startTime.getDate() - 30); // Last 30 days
-
-      const history = await this.hass.callWS<Record<string, HistoryState[]>>({
-        type: "history/history_during_period",
-        start_time: startTime.toISOString(),
-        end_time: endTime.toISOString(),
-        entity_ids: [entityId],
-        minimal_response: false,
-        significant_changes_only: false,
+      const list = await this.hass.callWS<{ shots: ShotSummary[] }>({
+        type: "xenia_home/shots/list",
+        limit: this._config.max_shots,
       });
-
-      if (history && history[entityId]) {
-        // Filter for shot_completed events and extract shot data
-        const shots = history[entityId]
-          .filter((state) => state.a?.event_type === "shot_completed")
-          .map((state) => {
-            const attributes = state.a;
-            const eventData = attributes as unknown as ShotData;
-            return this._normalizeShotData(eventData);
-          })
-          .filter((shot): shot is ShotData => Boolean(shot))
-          .reverse(); // Most recent first
-
-        // Merge behind shots already delivered live: the recorder may lag
-        // behind the most recent shot, and dedupe keeps overlap harmless.
+      const ids = list.shots.map((s) => s.shot_id);
+      if (ids.length) {
+        const full = await this.hass.callWS<{ shots: unknown[] }>({
+          type: "xenia_home/shots/get",
+          shot_ids: ids,
+        });
+        const shots = full.shots
+          .map((shot) => this._normalizeShotData(shot))
+          .filter((shot): shot is ShotData => Boolean(shot));
+        // Merge behind shots already delivered live; dedupe keeps overlap
+        // harmless.
         this._shots = this._dedupeShots([...this._shots, ...shots]).slice(
           0,
           this._config.max_shots
         );
       }
-
       this._selectedShot = this._shots[0] ?? null;
     } catch (err) {
       if (this._isUnknownCommandError(err)) {
-        console.info(
-          "Xenia Home Card: history integration not available; falling back to live events only"
-        );
+        // Integration older than the shots API: history is unavailable but
+        // live updates still work. A dedicated flag (not _error) so the
+        // error-retry path does not hammer the WS with unknown commands.
+        this._integrationOutdated = true;
       } else {
         const detail = this._describeError(err);
         this._error = `${this._t("card.load_error")}: ${detail}`;
@@ -819,6 +790,11 @@ export class XeniaHomeCard extends LitElement {
   }
 
   private _renderContent(): TemplateResult {
+    if (this._integrationOutdated && this._shots.length === 0) {
+      return html`<div class="empty">
+        ${this._t("card.integration_outdated")}
+      </div>`;
+    }
     if (this._shots.length === 0) {
       return html`<div class="empty">${this._t("card.no_shots")}</div>`;
     }

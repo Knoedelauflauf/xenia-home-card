@@ -2,8 +2,8 @@
   "card": {
     "loading": "Laden...",
     "no_shots": "Noch keine Bezüge aufgezeichnet",
-    "no_entity": "Kein Xenia Event-Entity gefunden",
     "load_error": "Fehler beim Laden der Bezüge",
+    "integration_outdated": "Benötigt Xenia Home Integration 0.7.0 oder neuer",
     "default_title": "Espresso Bezüge",
     "brewing": "Bezug läuft..."
   },

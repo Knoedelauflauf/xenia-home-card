@@ -11,6 +11,14 @@ export interface ShotData {
   weights: number[];
 }
 
+export interface ShotSummary {
+  shot_id: string;
+  start_time: string;
+  brew_end_time: string | null;
+  duration_seconds: number;
+  final_weight_g: number | null;
+}
+
 export interface XeniaHomeCardConfig extends LovelaceCardConfig {
   entity?: string;
   event_type?: string;

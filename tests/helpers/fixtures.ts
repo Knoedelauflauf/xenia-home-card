@@ -62,18 +62,3 @@ export function makeIdleEventState(
     last_updated: "2026-05-18T07:00:00+00:00",
   };
 }
-
-export function makeHistoryEntry(shot: ShotData): {
-  s: string;
-  a: Record<string, unknown>;
-  lu: number;
-} {
-  return {
-    s: shot.start_time,
-    a: {
-      event_type: "shot_completed",
-      ...(shot as unknown as Record<string, unknown>),
-    },
-    lu: Date.parse(shot.start_time) / 1000,
-  };
-}
