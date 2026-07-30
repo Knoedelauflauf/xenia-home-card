@@ -91,13 +91,12 @@ either directly or nested under `event_data`, `shot`, or `shot_data`.
 ## Requirements
 
 - Home Assistant
-- Xenia Espresso Machine integration version 0.4.0 or newer installed and configured (the card reads its shot tracker event entity, introduced in 0.4.0)
+- Xenia Espresso Machine integration version 0.7.0 or newer installed and configured (shot history is loaded through the integration's own WebSocket API, added in 0.7.0)
 
 > [!NOTE]
-> Shot history is backfilled via the `recorder` and `history` integrations
-> (enabled by default in Home Assistant). Without them the card shows live
-> shots only, and excluding the shot tracker event entity from the recorder
-> leaves the history empty.
+> With an older integration version, the card shows live shots only and
+> displays a hint asking for an upgrade — shot history is unavailable until
+> the integration is updated to 0.7.0 or newer.
 
 ## Development
 
