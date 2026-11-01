@@ -474,10 +474,40 @@ describe("xenia-home-card mount", () => {
       shots: [shot],
     });
     await mountCard(hass);
+    await flush();
     const getCall = hass.callWS.mock.calls.find(
       (c) => (c[0] as { type: string }).type === "xenia_home/shots/get"
     );
     expect(getCall?.[0]).toMatchObject({ shot_ids: [shot.start_time] });
+  });
+
+  it("loads the history of the configured entity's machine when several are loaded", async () => {
+    const other = "event.second_machine_shot_tracker";
+    const hass = createMockHass({
+      states: {
+        [ENTITY_ID]: makeIdleEventState(),
+        [other]: makeIdleEventState(other),
+      },
+      machines: {
+        entry_a: {
+          entity: ENTITY_ID,
+          shots: [makeShot({ duration_seconds: 11.1 })],
+        },
+        entry_b: {
+          entity: other,
+          shots: [makeShot({ duration_seconds: 22.2 })],
+        },
+      },
+    });
+    const el = await mountCard(hass, { entity: other });
+    await flush();
+    el.requestUpdate();
+    await el.updateComplete;
+
+    const texts = Array.from(shotItems(el)).map((i) => i.textContent ?? "");
+    expect(texts).toHaveLength(1);
+    expect(texts[0]).toContain("22.2");
+    expect(el.shadowRoot.textContent).not.toContain("Several entries");
   });
 
   it("shows the integration version hint on unknown_command", async () => {
@@ -486,6 +516,9 @@ describe("xenia-home-card mount", () => {
     });
     hass.callWS = vi.fn().mockRejectedValue({ code: "unknown_command" });
     const card = await mountCard(hass);
+    await flush();
+    card.requestUpdate();
+    await card.updateComplete;
     expect(card.shadowRoot?.textContent).toContain(
       "Requires Xenia Home integration 0.7.0 or newer"
     );

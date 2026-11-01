@@ -439,21 +439,38 @@ export class XeniaHomeCard extends LitElement {
     }
   }
 
+  private async _entryFilter(): Promise<{ entry_id?: string }> {
+    const entityId = this._resolveEntityId();
+    if (!entityId) return {};
+    try {
+      const entry = await this.hass.callWS<{ config_entry_id: string | null }>({
+        type: "config/entity_registry/get",
+        entity_id: entityId,
+      });
+      return entry.config_entry_id ? { entry_id: entry.config_entry_id } : {};
+    } catch {
+      return {};
+    }
+  }
+
   private async _loadShotHistory(): Promise<void> {
     this._loading = true;
     this._error = null;
     this._integrationOutdated = false;
 
     try {
+      const entry = await this._entryFilter();
       const list = await this.hass.callWS<{ shots: ShotSummary[] }>({
         type: "xenia_home/shots/list",
         limit: this._config.max_shots,
+        ...entry,
       });
       const ids = list.shots.map((s) => s.shot_id);
       if (ids.length) {
         const full = await this.hass.callWS<{ shots: unknown[] }>({
           type: "xenia_home/shots/get",
           shot_ids: ids,
+          ...entry,
         });
         const shots = full.shots
           .map((shot) => this._normalizeShotData(shot))
