@@ -785,22 +785,26 @@ export class XeniaHomeCard extends LitElement {
       <ha-card>
         <div class="card-header">
           <span class="title">${this._cardTitle()}</span>
-          ${this._isBrewing()
-            ? html`<span class="brewing-indicator">
-                <span class="brewing-dot"></span>${this._t("card.brewing")}
-              </span>`
-            : ""}
+          ${
+            this._isBrewing()
+              ? html`<span class="brewing-indicator">
+                  <span class="brewing-dot"></span>${this._t("card.brewing")}
+                </span>`
+              : ""
+          }
           <ha-icon-button
             .path=${"M17.65,6.35C16.2,4.9 14.21,4 12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20C15.73,20 18.84,17.45 19.73,14H17.65C16.83,16.33 14.61,18 12,18A6,6 0 0,1 6,12A6,6 0 0,1 12,6C13.66,6 15.14,6.69 16.22,7.78L13,11H20V4L17.65,6.35Z"}
             @click=${this._loadShotHistory}
           ></ha-icon-button>
         </div>
         <div class="card-content">
-          ${this._loading
-            ? html`<div class="loading">${this._t("card.loading")}</div>`
-            : this._error
-              ? html`<div class="error">${this._error}</div>`
-              : this._renderContent()}
+          ${
+            this._loading
+              ? html`<div class="loading">${this._t("card.loading")}</div>`
+              : this._error
+                ? html`<div class="error">${this._error}</div>`
+                : this._renderContent()
+          }
         </div>
       </ha-card>
     `;
@@ -817,46 +821,48 @@ export class XeniaHomeCard extends LitElement {
     }
 
     return html`
-      ${this._config.show_chart && this._selectedShot
-        ? html`
-            <div
-              class="chart-container"
-              style="height: ${this._config.chart_height}px"
-            >
-              <canvas id="shot-chart"></canvas>
-            </div>
-            <div class="shot-details">
-              <span class="detail">
-                <ha-icon icon="mdi:clock-outline"></ha-icon>
-                ${this._formatDuration(this._selectedShot.duration_seconds)}
-              </span>
-              <span class="detail">
-                <ha-icon icon="mdi:thermometer"></ha-icon>
-                ${this._t("details.brew_group_short")}
-                ${this._formatAverage(
-                  this._selectedShot.brew_group_temps,
-                  "°C"
-                )}
-              </span>
-              <span class="detail">
-                <ha-icon icon="mdi:thermometer"></ha-icon>
-                ${this._t("details.brew_boiler_short")}
-                ${this._formatAverage(
-                  this._selectedShot.brew_boiler_temps,
-                  "°C"
-                )}
-              </span>
-              <span class="detail">
-                <ha-icon icon="mdi:weight-gram"></ha-icon>
-                ${this._formatLast(this._selectedShot.weights, "g")}
-              </span>
-              <span class="detail">
-                <ha-icon icon="mdi:gauge"></ha-icon>
-                ${this._formatMax(this._selectedShot.pump_pressures, " bar")}
-              </span>
-            </div>
-          `
-        : ""}
+      ${
+        this._config.show_chart && this._selectedShot
+          ? html`
+              <div
+                class="chart-container"
+                style="height: ${this._config.chart_height}px"
+              >
+                <canvas id="shot-chart"></canvas>
+              </div>
+              <div class="shot-details">
+                <span class="detail">
+                  <ha-icon icon="mdi:clock-outline"></ha-icon>
+                  ${this._formatDuration(this._selectedShot.duration_seconds)}
+                </span>
+                <span class="detail">
+                  <ha-icon icon="mdi:thermometer"></ha-icon>
+                  ${this._t("details.brew_group_short")}
+                  ${this._formatAverage(
+                    this._selectedShot.brew_group_temps,
+                    "°C"
+                  )}
+                </span>
+                <span class="detail">
+                  <ha-icon icon="mdi:thermometer"></ha-icon>
+                  ${this._t("details.brew_boiler_short")}
+                  ${this._formatAverage(
+                    this._selectedShot.brew_boiler_temps,
+                    "°C"
+                  )}
+                </span>
+                <span class="detail">
+                  <ha-icon icon="mdi:weight-gram"></ha-icon>
+                  ${this._formatLast(this._selectedShot.weights, "g")}
+                </span>
+                <span class="detail">
+                  <ha-icon icon="mdi:gauge"></ha-icon>
+                  ${this._formatMax(this._selectedShot.pump_pressures, " bar")}
+                </span>
+              </div>
+            `
+          : ""
+      }
 
       <div class="shot-list">
         ${this._shots.map(
@@ -872,9 +878,11 @@ export class XeniaHomeCard extends LitElement {
                 >${this._formatDuration(shot.duration_seconds)}</span
               >
               <span class="shot-weight">
-                ${shot.weights.at(-1) !== undefined
-                  ? `${shot.weights.at(-1)!.toFixed(1)}g`
-                  : ""}
+                ${
+                  shot.weights.at(-1) !== undefined
+                    ? `${shot.weights.at(-1)!.toFixed(1)}g`
+                    : ""
+                }
               </span>
             </div>
           `
