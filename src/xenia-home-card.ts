@@ -332,16 +332,9 @@ export class XeniaHomeCard extends LitElement {
     }
   }
 
-  // Lovelace hands the card a fresh hass object on every state change; this
-  // is the live-update path for shots and needs no privileged subscription.
-  // The event entity's state is the trigger timestamp — it changes on every
-  // completed shot, while attribute-only updates (is_brewing flips on each
-  // poll) leave it untouched. A state change with event_type
-  // "shot_completed" therefore identifies a new shot. The first sighting of
-  // an entity (including after a config change or rename) also pushes its
-  // current shot: _pushShot dedupes by start_time, so overlap with the
-  // history backfill is harmless, and users without recorder access still
-  // see the latest shot.
+  // The event entity's state changes only when a shot completes; is_brewing
+  // flips on each poll as an attribute and leaves it untouched. The first
+  // sighting of an entity also pushes its current shot, deduped by start_time.
   private _processEntityState(entityId: string | null): void {
     if (!entityId) {
       this._lastShotEntity = null;
