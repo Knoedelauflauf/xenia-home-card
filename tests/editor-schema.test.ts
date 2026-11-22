@@ -15,7 +15,7 @@ vi.mock("chart.js", () => ({
 import { XeniaHomeCard } from "../src/xenia-home-card";
 
 describe("getConfigForm()", () => {
-  it("F13: schema contains all 5 expected fields in order", () => {
+  it("schema contains all 5 expected fields in order", () => {
     const form = XeniaHomeCard.getConfigForm();
     const names = form.schema.map((s: { name: string }) => s.name);
     expect(names).toEqual([
@@ -27,14 +27,14 @@ describe("getConfigForm()", () => {
     ]);
   });
 
-  it("F14: assertConfig throws for chart_height below range", () => {
+  it("assertConfig throws for chart_height below range", () => {
     const form = XeniaHomeCard.getConfigForm();
     expect(() =>
       form.assertConfig!({ type: "custom:xenia-home-card", chart_height: -1 })
     ).toThrow();
   });
 
-  it("F15: assertConfig accepts valid in-range config", () => {
+  it("assertConfig accepts valid in-range config", () => {
     const form = XeniaHomeCard.getConfigForm();
     expect(() =>
       form.assertConfig!({

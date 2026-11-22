@@ -15,7 +15,7 @@ import {
 } from "./helpers/fixtures";
 import type { HassEntity } from "../src/types";
 
-// Mock Chart.js — patch with a proper constructor so `new Chart(ctx, ...)` works.
+// Mock Chart.js: patch with a proper constructor so `new Chart(ctx, ...)` works.
 vi.mock("chart.js", () => {
   const ChartConstructor = vi.fn(function MockChart(
     this: Record<string, unknown>
@@ -43,7 +43,7 @@ vi.mock("chart.js", () => {
 import "../src/xenia-home-card";
 import * as ChartModule from "chart.js";
 
-// happy-dom canvas stub — getContext("2d") returns null by default, which
+// happy-dom canvas stub: getContext("2d") returns null by default, which
 // prevents the Chart constructor from being called. Patch it with a minimal
 // CanvasRenderingContext2D stub so chart-related tests can assert on Chart.
 HTMLCanvasElement.prototype.getContext = function (this: HTMLCanvasElement) {
@@ -155,7 +155,7 @@ describe("xenia-home-card mount", () => {
     expect(empty).not.toBeNull();
   });
 
-  it("F1: renders 3 shots from history, newest selected, chart created", async () => {
+  it("renders 3 shots from history, newest selected, chart created", async () => {
     const shots = [
       makeShot({ start_time: "2026-05-18T08:00:00+00:00" }),
       makeShot({ start_time: "2026-05-18T09:00:00+00:00" }),
@@ -178,7 +178,7 @@ describe("xenia-home-card mount", () => {
     expect(canvas).not.toBeNull();
   });
 
-  it("F2: live shot via hass state change appears in the list", async () => {
+  it("live shot via hass state change appears in the list", async () => {
     const initial = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(initial) },
@@ -193,7 +193,7 @@ describe("xenia-home-card mount", () => {
     expect(shotItems(el).length).toBe(2);
   });
 
-  it("F3: state change with a duplicate start_time does not produce a second entry", async () => {
+  it("state change with a duplicate start_time does not produce a second entry", async () => {
     const initial = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(initial) },
@@ -221,7 +221,7 @@ describe("xenia-home-card mount", () => {
     const el = await mountCard(hass);
     await flush();
 
-    // Unchanged state, but attributes carry a different start_time — without
+    // Unchanged state, but attributes carry a different start_time. Without
     // the state guard this would (wrongly) appear as a new shot.
     const sneaky = makeShot({ start_time: "2026-05-18T10:00:00+00:00" });
     await pushHass(el, hass, {
@@ -259,7 +259,7 @@ describe("xenia-home-card mount", () => {
     expect(shotItems(el).length).toBe(1);
 
     // Entity renamed: old id gone, new id carries a new shot but the exact
-    // same state string — only a reset marker lets it through.
+    // same state string; only a reset marker lets it through.
     await pushHass(el, hass, {
       [renamedEntityId]: makeEventState(shotB, renamedEntityId, {
         state: shotA.start_time,
@@ -269,7 +269,7 @@ describe("xenia-home-card mount", () => {
     expect(shotItems(el).length).toBe(2);
   });
 
-  it("F4: malformed payload (missing duration_seconds) is ignored", async () => {
+  it("malformed payload (missing duration_seconds) is ignored", async () => {
     const initial = makeShot({ start_time: "2026-05-18T08:00:00+00:00" });
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(initial) },
@@ -287,7 +287,7 @@ describe("xenia-home-card mount", () => {
     expect(shotItems(el).length).toBe(1);
   });
 
-  it("F6: auto-detect finds entity renamed to event.kaffee via event_types", async () => {
+  it("auto-detect finds entity renamed to event.kaffee via event_types", async () => {
     const renamedEntityId = "event.kaffee";
     const hass = createMockHass({
       states: { [renamedEntityId]: makeIdleEventState(renamedEntityId) },
@@ -307,7 +307,7 @@ describe("xenia-home-card mount", () => {
     expect(shotItems(el).length).toBe(1);
   });
 
-  it("F7: show_chart: false hides the canvas", async () => {
+  it("show_chart: false hides the canvas", async () => {
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(makeShot()) },
       shots: [makeShot()],
@@ -320,7 +320,7 @@ describe("xenia-home-card mount", () => {
     expect(el.shadowRoot.querySelector("#shot-chart")).toBeNull();
   });
 
-  it("F8: toggling show_chart off destroys the chart instance", async () => {
+  it("toggling show_chart off destroys the chart instance", async () => {
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(makeShot()) },
       shots: [makeShot()],
@@ -342,7 +342,7 @@ describe("xenia-home-card mount", () => {
     expect(chartInstance.destroy).toHaveBeenCalled();
   });
 
-  it("F9: date format differs between hass.language 'en' and 'de'", async () => {
+  it("date format differs between hass.language 'en' and 'de'", async () => {
     const shot = makeShot({ start_time: "2026-05-18T08:30:00+00:00" });
     const hassEn = createMockHass({
       language: "en",
@@ -375,7 +375,7 @@ describe("xenia-home-card mount", () => {
     expect(dateEn).not.toEqual(dateDe);
   });
 
-  it("F10: clicking a shot item selects it and re-creates the chart", async () => {
+  it("clicking a shot item selects it and re-creates the chart", async () => {
     const shots = [
       makeShot({ start_time: "2026-05-18T08:00:00+00:00" }),
       makeShot({ start_time: "2026-05-18T09:00:00+00:00" }),
@@ -398,7 +398,7 @@ describe("xenia-home-card mount", () => {
     expect(ChartModule.Chart).toHaveBeenCalled();
   });
 
-  it("F11: shot with empty pump_pressures shows N/A, not -Infinity bar", async () => {
+  it("shot with empty pump_pressures shows N/A, not -Infinity bar", async () => {
     const shotNoPressure = makeShot({
       start_time: "2026-05-18T08:00:00+00:00",
       pump_pressures: [],
@@ -421,7 +421,7 @@ describe("xenia-home-card mount", () => {
 
   it("evicted shot can re-enter via live state change after max_shots eviction", async () => {
     // max_shots=2, start with 2 shots, push a third (evicts oldest), then
-    // re-push the evicted one — it should reappear in the list.
+    // re-push the evicted one, which should reappear in the list.
     // Each shot has a unique duration_seconds so we can identify it in the
     // rendered output without depending on timezone-formatted timestamps.
     const evictee = makeShot({
@@ -558,7 +558,7 @@ describe("event_type escape hatch", () => {
     await flush();
 
     // Neither the first sighting nor a later state change may deliver the
-    // entity's shot — the escape hatch bypasses the integration's updates.
+    // entity's shot: the escape hatch bypasses the integration's updates.
     expect(shotItems(el).length).toBe(0);
     const next = makeShot({ start_time: "2026-05-18T09:30:00+00:00" });
     await pushHass(el, hass, { [ENTITY_ID]: makeEventState(next) });
@@ -574,7 +574,7 @@ describe("event_type escape hatch", () => {
     expect(shotItems(el).length).toBe(1);
   });
 
-  it("F12: disconnectedCallback unsubscribes from the event bus", async () => {
+  it("disconnectedCallback unsubscribes from the event bus", async () => {
     const hass = createMockHass({ states: {} });
     const el = await mountCard(hass, { event_type: "my_shot_event" });
     await flush();
@@ -677,7 +677,7 @@ describe("card title fallback", () => {
   it("uses hass.formatEntityName when no title is configured and helper exists", async () => {
     const hass = createMockHass({
       states: { [ENTITY_ID]: makeEventState(makeShot()) },
-      formatEntityName: () => "Shot tracker — formatted",
+      formatEntityName: () => "Shot tracker (formatted)",
     });
     const el = await mountCard(hass);
     await flush();
@@ -685,7 +685,7 @@ describe("card title fallback", () => {
     await el.updateComplete;
 
     const title = el.shadowRoot.querySelector(".title")?.textContent?.trim();
-    expect(title).toBe("Shot tracker — formatted");
+    expect(title).toBe("Shot tracker (formatted)");
   });
 
   it("falls back to localized default title when helper is absent", async () => {

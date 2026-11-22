@@ -20,20 +20,26 @@ A Home Assistant Lovelace card for visualizing espresso shots from Xenia espress
 
 ## Installation
 
-### HACS (Recommended)
+### Marketplace (Home Assistant 2026.11 and later, recommended)
 
-1. Open HACS in Home Assistant
-2. Go to "Frontend" section
-3. Click the three dots menu and select "Custom repositories"
-4. Add this repository URL and select "Lovelace" as the category
-5. Install "Xenia Home Card"
-6. Refresh your browser (hard-reload: Ctrl+Shift+R / Cmd+Shift+R) to load the card
+1. Go to **Settings → Marketplace** and select **Add from link** in the upper-right corner.
+2. Enter `https://github.com/Knoedelauflauf/xenia-home-card` and select **Add**. Adding a custom repository needs a GitHub connection; the Marketplace asks you to connect if you have not yet.
+3. Open **Xenia Home Card** and select **Install**. The card is added to your dashboard resources.
+4. Reload the browser. If a repair under **Settings → System → Repairs** asks for a restart, restart Home Assistant first.
 
-### Manual Installation
+### HACS (Home Assistant 2026.10)
 
-1. Download `xenia-home-card.js` from the latest release
-2. Copy it to `config/www/xenia-home-card.js`
-3. Add the resource in your Lovelace configuration:
+1. In Home Assistant, open HACS.
+2. Open the three-dot menu in the top right and choose **Custom repositories**.
+3. Add `https://github.com/Knoedelauflauf/xenia-home-card` with category **Dashboard**, then click **Add**.
+4. Search HACS for **Xenia Home Card** and download it.
+5. Reload the browser.
+
+### Manual
+
+1. Download `xenia-home-card.js` from the latest release on the [Releases page](https://github.com/Knoedelauflauf/xenia-home-card/releases).
+2. Copy it to `config/www/xenia-home-card.js`.
+3. Go to **Settings → Dashboards**, open the three-dot menu, choose **Resources** and add `/local/xenia-home-card.js` as a **JavaScript module**. With dashboards in YAML mode, add it under `lovelace: resources:` instead:
 
 ```yaml
 resources:
@@ -43,7 +49,7 @@ resources:
 
 ## Configuration
 
-Add the card to your dashboard - it will automatically detect your Xenia machine:
+Add the card to your dashboard. It detects your Xenia machine automatically:
 
 ```yaml
 type: custom:xenia-home-card
@@ -54,7 +60,7 @@ type: custom:xenia-home-card
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `entity` | string | auto-detect | The shot tracker event entity (optional) |
-| `title` | string | (localized) | Card title |
+| `title` | string | shot tracker name | Card title; without a name the localized "Espresso Shots" |
 | `show_chart` | boolean | `true` | Show the shot chart |
 | `chart_height` | number | `200` | Chart height in pixels |
 | `max_shots` | number | `10` | Maximum shots to display |
@@ -85,7 +91,7 @@ either directly or nested under `event_data`, `shot`, or `shot_data`.
 
 > [!NOTE]
 > `event_type` is not needed with the Xenia Espresso Machine integration and
-> receives nothing from it — with it set, the integration's live shot updates
+> receives nothing from it. With it set, the integration's live shot updates
 > are bypassed.
 
 ## Requirements
@@ -94,9 +100,9 @@ either directly or nested under `event_data`, `shot`, or `shot_data`.
 - Xenia Espresso Machine integration version 0.7.0 or newer installed and configured (shot history is loaded through the integration's own WebSocket API, added in 0.7.0)
 
 > [!NOTE]
-> With an older integration version, the card shows live shots only and
-> displays a hint asking for an upgrade — shot history is unavailable until
-> the integration is updated to 0.7.0 or newer.
+> With an older integration version, the card shows live shots only, and an
+> upgrade hint until the first live shot arrives. Shot history is unavailable
+> until the integration is updated to 0.7.0 or newer.
 
 ## Development
 
