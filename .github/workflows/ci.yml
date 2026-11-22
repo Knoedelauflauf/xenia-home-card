@@ -21,6 +21,8 @@ jobs:
       - run: npm run analyze:lit
       - run: npm run test:coverage
       - run: npm run build
+      - name: dist matches the sources
+        run: git diff --exit-code dist/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
