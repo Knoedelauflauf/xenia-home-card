@@ -2,6 +2,8 @@
 
 A Home Assistant Lovelace card for visualizing espresso shots from Xenia espresso machines.
 
+![Xenia Home Card with the chart of a shot and the shot history](https://raw.githubusercontent.com/Knoedelauflauf/xenia-home-card/main/images/card.png)
+
 ## Disclaimer
 
 > [!IMPORTANT]
